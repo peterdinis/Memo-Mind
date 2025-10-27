@@ -1,7 +1,6 @@
 "use client";
 
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { Button } from "@/components/ui/button";
 import { 
   Breadcrumb,
   BreadcrumbItem,
@@ -10,11 +9,9 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Plus } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 
 export function DashboardNavbar() {
-  const router = useRouter();
   const pathname = usePathname();
 
   const getBreadcrumbItems = () => {
@@ -65,15 +62,6 @@ export function DashboardNavbar() {
             </Breadcrumb>
           )}
         </div>
-
-        <Button
-          onClick={() => router.push("/dashboard/upload")}
-          className="gap-2"
-          size="lg"
-        >
-          <Plus className="h-4 w-4" />
-          New Document
-        </Button>
       </div>
     </header>
   );

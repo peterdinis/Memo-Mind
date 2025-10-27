@@ -9,6 +9,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination";
 import { 
   FileText, 
   MoreVertical, 
@@ -20,6 +29,7 @@ import {
   Plus
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 // Mock data
 const mockDocuments = [
@@ -55,8 +65,113 @@ const statusVariants = {
   error: "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400",
 };
 
+const ITEMS_PER_PAGE = 3;
+
 export function DocumentGrid() {
   const router = useRouter();
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Calculate pagination
+  const totalPages = Math.ceil(mockDocuments.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const currentDocuments = mockDocuments.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    // Scroll to top when page changes
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const renderPaginationItems = () => {
+    const items = [];
+    const maxVisiblePages = 5;
+
+    if (totalPages <= maxVisiblePages) {
+      // Show all pages if total pages is less than max visible
+      for (let i = 1; i <= totalPages; i++) {
+        items.push(
+          <PaginationItem key={i}>
+            <PaginationLink
+              isActive={currentPage === i}
+              onClick={() => handlePageChange(i)}
+            >
+              {i}
+            </PaginationLink>
+          </PaginationItem>
+        );
+      }
+    } else {
+      // Show first page, current page with neighbors, and last page
+      let startPage = Math.max(1, currentPage - 1);
+      let endPage = Math.min(totalPages, currentPage + 1);
+
+      if (currentPage <= 2) {
+        endPage = 3;
+      } else if (currentPage >= totalPages - 1) {
+        startPage = totalPages - 2;
+      }
+
+      // First page
+      items.push(
+        <PaginationItem key={1}>
+          <PaginationLink
+            isActive={currentPage === 1}
+            onClick={() => handlePageChange(1)}
+          >
+            1
+          </PaginationLink>
+        </PaginationItem>
+      );
+
+      // Ellipsis after first page if needed
+      if (startPage > 2) {
+        items.push(
+          <PaginationItem key="ellipsis-start">
+            <PaginationEllipsis />
+          </PaginationItem>
+        );
+      }
+
+      // Middle pages
+      for (let i = startPage; i <= endPage; i++) {
+        if (i > 1 && i < totalPages) {
+          items.push(
+            <PaginationItem key={i}>
+              <PaginationLink
+                isActive={currentPage === i}
+                onClick={() => handlePageChange(i)}
+              >
+                {i}
+              </PaginationLink>
+            </PaginationItem>
+          );
+        }
+      }
+
+      // Ellipsis before last page if needed
+      if (endPage < totalPages - 1) {
+        items.push(
+          <PaginationItem key="ellipsis-end">
+            <PaginationEllipsis />
+          </PaginationItem>
+        );
+      }
+
+      // Last page
+      items.push(
+        <PaginationItem key={totalPages}>
+          <PaginationLink
+            isActive={currentPage === totalPages}
+            onClick={() => handlePageChange(totalPages)}
+          >
+            {totalPages}
+          </PaginationLink>
+        </PaginationItem>
+      );
+    }
+
+    return items;
+  };
 
   return (
     <div className="min-h-screen">
@@ -74,7 +189,7 @@ export function DocumentGrid() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
           {/* Upload New Card */}
           <Card 
             className="border-2 border-dashed border-muted-foreground/25 hover:border-primary/50 transition-all duration-200 cursor-pointer hover:shadow-md group h-full min-h-[280px] flex flex-col"
@@ -92,7 +207,7 @@ export function DocumentGrid() {
           </Card>
 
           {/* Document Cards */}
-          {mockDocuments.map((doc) => (
+          {currentDocuments.map((doc) => (
             <Card 
               key={doc.id}
               className="group hover:shadow-lg transition-all duration-200 cursor-pointer border-2 border-transparent hover:border-primary/20 h-full min-h-[280px] flex flex-col"
@@ -144,7 +259,8 @@ export function DocumentGrid() {
                     className={`text-xs ${statusVariants[doc.status]}`}
                     variant="outline"
                   >
-                    {doc.status === "processing" ? "Processing..." : "Ready"}
+                    {doc.status === "processing" ? "Processing..." : 
+                     doc.status === "error" ? "Error" : "Ready"}
                   </Badge>
                 </div>
               </CardHeader>
@@ -171,7 +287,7 @@ export function DocumentGrid() {
                     e.stopPropagation();
                     router.push(`/dashboard/chat/${doc.id}`);
                   }}
-                  disabled={doc.status === "processing"}
+                  disabled={doc.status === "processing" || doc.status === "error"}
                 >
                   <MessageSquare className="h-4 w-4" />
                   Chat with AI
@@ -180,6 +296,31 @@ export function DocumentGrid() {
             </Card>
           ))}
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex justify-center">
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious 
+                    onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                    className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+                
+                {renderPaginationItems()}
+                
+                <PaginationItem>
+                  <PaginationNext 
+                    onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                    className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        )}
       </div>
     </div>
   );
