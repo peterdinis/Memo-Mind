@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { SidebarProvider } from "../ui/sidebar";
 
 interface DashboardContextType {
   isSidebarOpen: boolean;
@@ -23,7 +24,9 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <DashboardContext.Provider value={{ isSidebarOpen, toggleSidebar, closeSidebar }}>
-      {children}
+      <SidebarProvider>
+        {children}
+      </SidebarProvider>
     </DashboardContext.Provider>
   );
 }

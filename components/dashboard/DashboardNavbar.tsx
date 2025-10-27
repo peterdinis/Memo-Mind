@@ -1,6 +1,6 @@
 "use client";
 
-import { useDashboard } from "@/components/providers/dashboard-provider";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { 
   Breadcrumb,
@@ -10,11 +10,10 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Menu, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 
 export function DashboardNavbar() {
-  const { toggleSidebar } = useDashboard();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -35,42 +34,42 @@ export function DashboardNavbar() {
     });
   };
 
+  const breadcrumbItems = getBreadcrumbItems();
+
   return (
     <header className="bg-background/95 backdrop-blur-sm border-b border-border sticky top-0 z-30">
       <div className="flex items-center justify-between p-4">
         <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleSidebar}
-            className="lg:hidden"
-          >
-            <Menu className="h-5 w-5" />
-          </Button>
+          <SidebarTrigger className="h-9 w-9" />
           
-          <Breadcrumb>
-            <BreadcrumbList>
-              {getBreadcrumbItems().map((item, index) => (
-                <div key={item.name} className="flex items-center">
-                  {index > 0 && <BreadcrumbSeparator />}
-                  <BreadcrumbItem>
-                    {item.isLast ? (
-                      <BreadcrumbPage>{item.name}</BreadcrumbPage>
-                    ) : (
-                      <BreadcrumbLink href={item.href}>
-                        {item.name}
-                      </BreadcrumbLink>
-                    )}
-                  </BreadcrumbItem>
-                </div>
-              ))}
-            </BreadcrumbList>
-          </Breadcrumb>
+          {breadcrumbItems.length > 0 && (
+            <Breadcrumb>
+              <BreadcrumbList>
+                {breadcrumbItems.map((item, index) => (
+                  <div key={item.name} className="flex items-center">
+                    {index > 0 && <BreadcrumbSeparator />}
+                    <BreadcrumbItem>
+                      {item.isLast ? (
+                        <BreadcrumbPage className="text-lg font-semibold">
+                          {item.name}
+                        </BreadcrumbPage>
+                      ) : (
+                        <BreadcrumbLink href={item.href} className="text-lg">
+                          {item.name}
+                        </BreadcrumbLink>
+                      )}
+                    </BreadcrumbItem>
+                  </div>
+                ))}
+              </BreadcrumbList>
+            </Breadcrumb>
+          )}
         </div>
 
         <Button
           onClick={() => router.push("/dashboard/upload")}
           className="gap-2"
+          size="lg"
         >
           <Plus className="h-4 w-4" />
           New Document

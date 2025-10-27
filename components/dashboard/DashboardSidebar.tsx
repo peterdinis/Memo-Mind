@@ -10,8 +10,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarProvider,
-  SidebarTrigger,
 } from "@/components/ui/sidebar";
 import {
   BookOpen,
@@ -62,52 +60,50 @@ export function DashboardSidebar() {
   const pathname = usePathname();
 
   return (
-    <SidebarProvider>
-      <Sidebar>
-        <SidebarHeader>
-          <div className="flex items-center gap-2 px-2 py-4">
-            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-              <BookOpen className="h-4 w-4 text-white" />
-            </div>
-            <div className="flex flex-col">
-              <span className="font-semibold text-sm">MemoMind</span>
-              <span className="text-xs text-muted-foreground">AI Document Chat</span>
-            </div>
+    <Sidebar>
+      <SidebarHeader>
+        <div className="flex items-center gap-2 px-2 py-4">
+          <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
+            <BookOpen className="h-4 w-4 text-white" />
           </div>
-        </SidebarHeader>
-        
-        <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupLabel>Navigation</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {menuItems.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = pathname === item.url;
-                  
-                  return (
-                    <SidebarMenuItem key={item.url}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={isActive}
-                        tooltip={item.title}
+          <div className="flex flex-col">
+            <span className="font-semibold text-sm">MemoMind</span>
+            <span className="text-xs text-muted-foreground">AI Document Chat</span>
+          </div>
+        </div>
+      </SidebarHeader>
+      
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {menuItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.url;
+                
+                return (
+                  <SidebarMenuItem key={item.url}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive}
+                      tooltip={item.title}
+                    >
+                      <div
+                        onClick={() => router.push(item.url)}
+                        className="cursor-pointer"
                       >
-                        <div
-                          onClick={() => router.push(item.url)}
-                          className="cursor-pointer"
-                        >
-                          <Icon className="h-4 w-4" />
-                          <span>{item.title}</span>
-                        </div>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        </SidebarContent>
-      </Sidebar>
-    </SidebarProvider>
+                        <Icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </div>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+    </Sidebar>
   );
 }

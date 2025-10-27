@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { DashboardProvider } from "@/components/providers/dashboard-provider";
+import { SidebarProvider } from "@/components/ui/sidebar";
 
 export const metadata: Metadata = {
   title: "Dashboard - MemoMind",
@@ -14,12 +15,14 @@ export default function DashboardLayout({
 }) {
   return (
     <DashboardProvider>
-      <div className="flex h-screen bg-background">
-        <DashboardSidebar />
-        <main className="flex-1 flex flex-col overflow-hidden">
-          {children}
-        </main>
-      </div>
+      <SidebarProvider>
+        <div className="flex h-screen bg-background">
+          <DashboardSidebar />
+          <main className="flex-1 flex flex-col overflow-hidden">
+            {children}
+          </main>
+        </div>
+      </SidebarProvider>
     </DashboardProvider>
   );
 }
