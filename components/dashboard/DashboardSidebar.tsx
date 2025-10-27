@@ -19,6 +19,7 @@ import {
   Settings,
   Users,
   MessageSquare,
+  Activity,
 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 
@@ -29,24 +30,14 @@ const menuItems = [
     icon: Home,
   },
   {
-    title: "Documents",
-    url: "/dashboard/documents",
-    icon: FileText,
+    title: "Activity",
+    url: "/dashboard/activity",
+    icon: Activity,
   },
   {
     title: "Chat",
     url: "/dashboard/chat",
     icon: MessageSquare,
-  },
-  {
-    title: "Upload",
-    url: "/dashboard/upload",
-    icon: Plus,
-  },
-  {
-    title: "Team",
-    url: "/dashboard/team",
-    icon: Users,
   },
   {
     title: "Settings",
