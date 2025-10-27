@@ -4,6 +4,7 @@ import { BookOpen, Menu, X } from "lucide-react";
 import { Button } from "../ui/button";
 import { useRouter } from "next/navigation";
 import React from "react";
+import { ModeToggle } from "./ModeToggle";
 
 const Navigation: React.FC = () => {
     const router = useRouter();
@@ -25,19 +26,21 @@ const Navigation: React.FC = () => {
                     </span>
                 </div>
 
-                {/* Desktop Sign In Button */}
-                <div className="hidden md:block">
+                {/* Desktop Controls */}
+                <div className="hidden md:flex items-center gap-3">
                     <Button
                         onClick={() => router.push("/auth")}
-                        variant="outline"
-                        className="border-primary/20 hover:bg-primary/5"
+                        variant={"default"}
+                        className="border-primary/20"
                     >
                         Sign In
                     </Button>
+                    <ModeToggle />
                 </div>
 
-                {/* Mobile Hamburger Menu */}
-                <div className="md:hidden">
+                {/* Mobile Controls */}
+                <div className="flex md:hidden items-center gap-3">
+                    <ModeToggle />
                     <Button
                         variant="ghost"
                         size="icon"
