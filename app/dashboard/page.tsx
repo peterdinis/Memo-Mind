@@ -3,11 +3,12 @@ import { DocumentGrid } from "@/components/dashboard/DocumentGrid";
 
 export default function DashboardPage() {
   return (
-    <div className="flex-1 flex flex-col">
+    <div className="flex-1 flex flex-col w-full">
       <DashboardNavbar />
       
-      <div className="flex-1 overflow-auto p-6">
-        <div className="max-w-7xl mx-auto">
+      {/* Remove all padding and constraints */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden w-full">
+        <div className="p-6 w-full">
           {/* Welcome Section */}
           <div className="mb-8">
             <h2 className="text-3xl font-bold mb-2">Welcome back!</h2>
