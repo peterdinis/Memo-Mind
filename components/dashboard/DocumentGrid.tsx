@@ -18,6 +18,23 @@ import {
   PaginationPrevious,
   PaginationEllipsis,
 } from "@/components/ui/pagination";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { 
   FileText, 
   MoreVertical, 
@@ -26,7 +43,9 @@ import {
   Download,
   Trash2,
   Share,
-  Plus
+  Plus,
+  Copy,
+  CheckCircle2
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -67,19 +86,115 @@ const statusVariants = {
 
 const ITEMS_PER_PAGE = 3;
 
+type SortOption = "newest" | "oldest" | "name-asc" | "name-desc" | "size-asc" | "size-desc";
+
 export function DocumentGrid() {
   const router = useRouter();
   const [currentPage, setCurrentPage] = useState(1);
+  const [sortBy, setSortBy] = useState<SortOption>("newest");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
+  const [selectedDoc, setSelectedDoc] = useState<(typeof mockDocuments)[0] | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  // Sort documents based on selected option
+  const sortedDocuments = [...mockDocuments].sort((a, b) => {
+    switch (sortBy) {
+      case "newest":
+        return new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime();
+      case "oldest":
+        return new Date(a.uploadedAt).getTime() - new Date(b.uploadedAt).getTime();
+      case "name-asc":
+        return a.title.localeCompare(b.title);
+      case "name-desc":
+        return b.title.localeCompare(a.title);
+      case "size-asc":
+        return parseFloat(a.size) - parseFloat(b.size);
+      case "size-desc":
+        return parseFloat(b.size) - parseFloat(a.size);
+      default:
+        return 0;
+    }
+  });
 
   // Calculate pagination
-  const totalPages = Math.ceil(mockDocuments.length / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(sortedDocuments.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const currentDocuments = mockDocuments.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  const currentDocuments = sortedDocuments.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
-    // Scroll to top when page changes
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleSortChange = (value: SortOption) => {
+    setSortBy(value);
+    setCurrentPage(1);
+  };
+
+  const handleDeleteClick = (doc: (typeof mockDocuments)[0], e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedDoc(doc);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleShareClick = (doc: (typeof mockDocuments)[0], e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedDoc(doc);
+    setShareDialogOpen(true);
+  };
+
+  const handleDownloadClick = (doc: (typeof mockDocuments)[0], e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedDoc(doc);
+    setDownloadDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (selectedDoc) {
+      console.log("Deleting document:", selectedDoc.title);
+      // Here you would typically call an API to delete the document
+    }
+    setDeleteDialogOpen(false);
+    setSelectedDoc(null);
+  };
+
+  const handleShareConfirm = () => {
+    if (selectedDoc) {
+      const shareUrl = `${window.location.origin}/share/${selectedDoc.id}`;
+      navigator.clipboard.writeText(shareUrl).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
+    }
+    setShareDialogOpen(false);
+  };
+
+  const handleDownloadConfirm = () => {
+    if (selectedDoc) {
+      console.log("Downloading document:", selectedDoc.title);
+      // Here you would typically trigger the download
+      // For demo purposes, we'll create a mock download
+      const link = document.createElement('a');
+      link.href = '#';
+      link.download = `${selectedDoc.title}.${selectedDoc.type.toLowerCase()}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+    setDownloadDialogOpen(false);
+    setSelectedDoc(null);
+  };
+
+  const copyShareLink = () => {
+    if (selectedDoc) {
+      const shareUrl = `${window.location.origin}/share/${selectedDoc.id}`;
+      navigator.clipboard.writeText(shareUrl).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
+    }
   };
 
   const renderPaginationItems = () => {
@@ -87,7 +202,6 @@ export function DocumentGrid() {
     const maxVisiblePages = 5;
 
     if (totalPages <= maxVisiblePages) {
-      // Show all pages if total pages is less than max visible
       for (let i = 1; i <= totalPages; i++) {
         items.push(
           <PaginationItem key={i}>
@@ -101,7 +215,6 @@ export function DocumentGrid() {
         );
       }
     } else {
-      // Show first page, current page with neighbors, and last page
       let startPage = Math.max(1, currentPage - 1);
       let endPage = Math.min(totalPages, currentPage + 1);
 
@@ -111,7 +224,6 @@ export function DocumentGrid() {
         startPage = totalPages - 2;
       }
 
-      // First page
       items.push(
         <PaginationItem key={1}>
           <PaginationLink
@@ -123,7 +235,6 @@ export function DocumentGrid() {
         </PaginationItem>
       );
 
-      // Ellipsis after first page if needed
       if (startPage > 2) {
         items.push(
           <PaginationItem key="ellipsis-start">
@@ -132,7 +243,6 @@ export function DocumentGrid() {
         );
       }
 
-      // Middle pages
       for (let i = startPage; i <= endPage; i++) {
         if (i > 1 && i < totalPages) {
           items.push(
@@ -148,7 +258,6 @@ export function DocumentGrid() {
         }
       }
 
-      // Ellipsis before last page if needed
       if (endPage < totalPages - 1) {
         items.push(
           <PaginationItem key="ellipsis-end">
@@ -157,7 +266,6 @@ export function DocumentGrid() {
         );
       }
 
-      // Last page
       items.push(
         <PaginationItem key={totalPages}>
           <PaginationLink
@@ -180,9 +288,19 @@ export function DocumentGrid() {
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold">Your Documents</h2>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm">
-              Sort by: Newest
-            </Button>
+            <Select value={sortBy} onValueChange={handleSortChange}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Sort by..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Newest first</SelectItem>
+                <SelectItem value="oldest">Oldest first</SelectItem>
+                <SelectItem value="name-asc">Name A-Z</SelectItem>
+                <SelectItem value="name-desc">Name Z-A</SelectItem>
+                <SelectItem value="size-asc">Size: Small to Large</SelectItem>
+                <SelectItem value="size-desc">Size: Large to Small</SelectItem>
+              </SelectContent>
+            </Select>
             <Button variant="outline" size="sm">
               Filter
             </Button>
@@ -230,17 +348,17 @@ export function DocumentGrid() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenuItem onClick={(e) => handleDownloadClick(doc, e)}>
                         <Download className="h-4 w-4 mr-2" />
                         Download
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenuItem onClick={(e) => handleShareClick(doc, e)}>
                         <Share className="h-4 w-4 mr-2" />
                         Share
                       </DropdownMenuItem>
                       <DropdownMenuItem 
                         className="text-red-600 focus:text-red-600"
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={(e) => handleDeleteClick(doc, e)}
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
                         Delete
@@ -322,6 +440,86 @@ export function DocumentGrid() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Document</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{selectedDoc?.title}"? This action cannot be undone and the document will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteConfirm}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Share Dialog */}
+      <AlertDialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Share Document</AlertDialogTitle>
+            <AlertDialogDescription>
+              Share "{selectedDoc?.title}" with others. Anyone with the link will be able to view this document.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex items-center space-x-2">
+            <div className="grid flex-1 gap-2">
+              <div className="flex items-center space-x-2">
+                <div className="border rounded-md px-3 py-2 text-sm bg-muted flex-1 overflow-hidden">
+                  <span className="truncate">
+                    {selectedDoc ? `${window.location.origin}/share/${selectedDoc.id}` : ''}
+                  </span>
+                </div>
+                <Button 
+                  size="sm" 
+                  className="px-3"
+                  onClick={copyShareLink}
+                >
+                  {copied ? (
+                    <CheckCircle2 className="h-4 w-4" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                  <span className="sr-only">Copy</span>
+                </Button>
+              </div>
+              {copied && (
+                <p className="text-xs text-green-600">Link copied to clipboard!</p>
+              )}
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Close</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Download Confirmation Dialog */}
+      <AlertDialog open={downloadDialogOpen} onOpenChange={setDownloadDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Download Document</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to download "{selectedDoc?.title}"? The file will be saved to your device.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDownloadConfirm}>
+              Download
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
