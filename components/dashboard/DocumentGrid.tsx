@@ -9,6 +9,32 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { 
   FileText, 
   MoreVertical, 
@@ -17,9 +43,12 @@ import {
   Download,
   Trash2,
   Share,
-  Plus
+  Plus,
+  Copy,
+  CheckCircle2
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 // Mock data
 const mockDocuments = [
@@ -47,46 +76,6 @@ const mockDocuments = [
     size: "0.8 MB",
     status: "processed" as const,
   },
-  {
-    id: "4",
-    title: "Technical Documentation",
-    type: "PDF",
-    uploadedAt: "2024-01-12",
-    size: "3.2 MB",
-    status: "processed" as const,
-  },
-  {
-    id: "5",
-    title: "Business Plan 2024",
-    type: "PDF",
-    uploadedAt: "2024-01-11",
-    size: "4.1 MB",
-    status: "processed" as const,
-  },
-  {
-    id: "6",
-    title: "User Research Findings",
-    type: "DOCX",
-    uploadedAt: "2024-01-10",
-    size: "2.7 MB",
-    status: "processed" as const,
-  },
-  {
-    id: "7",
-    title: "API Documentation",
-    type: "PDF",
-    uploadedAt: "2024-01-09",
-    size: "5.3 MB",
-    status: "processed" as const,
-  },
-  {
-    id: "8",
-    title: "Product Specifications",
-    type: "DOCX",
-    uploadedAt: "2024-01-08",
-    size: "3.8 MB",
-    status: "processed" as const,
-  },
 ];
 
 const statusVariants = {
@@ -95,134 +84,230 @@ const statusVariants = {
   error: "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400",
 };
 
+const ITEMS_PER_PAGE = 3;
+
+type SortOption = "newest" | "oldest" | "name-asc" | "name-desc" | "size-asc" | "size-desc";
+
 export function DocumentGrid() {
   const router = useRouter();
+  const [currentPage, setCurrentPage] = useState(1);
+  const [sortBy, setSortBy] = useState<SortOption>("newest");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
+  const [selectedDoc, setSelectedDoc] = useState<(typeof mockDocuments)[0] | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  // Sort documents based on selected option
+  const sortedDocuments = [...mockDocuments].sort((a, b) => {
+    switch (sortBy) {
+      case "newest":
+        return new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime();
+      case "oldest":
+        return new Date(a.uploadedAt).getTime() - new Date(b.uploadedAt).getTime();
+      case "name-asc":
+        return a.title.localeCompare(b.title);
+      case "name-desc":
+        return b.title.localeCompare(a.title);
+      case "size-asc":
+        return parseFloat(a.size) - parseFloat(b.size);
+      case "size-desc":
+        return parseFloat(b.size) - parseFloat(a.size);
+      default:
+        return 0;
+    }
+  });
+
+  // Calculate pagination
+  const totalPages = Math.ceil(sortedDocuments.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const currentDocuments = sortedDocuments.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleSortChange = (value: SortOption) => {
+    setSortBy(value);
+    setCurrentPage(1);
+  };
+
+  const handleDeleteClick = (doc: (typeof mockDocuments)[0], e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedDoc(doc);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleShareClick = (doc: (typeof mockDocuments)[0], e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedDoc(doc);
+    setShareDialogOpen(true);
+  };
+
+  const handleDownloadClick = (doc: (typeof mockDocuments)[0], e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedDoc(doc);
+    setDownloadDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (selectedDoc) {
+      console.log("Deleting document:", selectedDoc.title);
+      // Here you would typically call an API to delete the document
+    }
+    setDeleteDialogOpen(false);
+    setSelectedDoc(null);
+  };
+
+  const handleShareConfirm = () => {
+    if (selectedDoc) {
+      const shareUrl = `${window.location.origin}/share/${selectedDoc.id}`;
+      navigator.clipboard.writeText(shareUrl).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
+    }
+    setShareDialogOpen(false);
+  };
+
+  const handleDownloadConfirm = () => {
+    if (selectedDoc) {
+      console.log("Downloading document:", selectedDoc.title);
+      // Here you would typically trigger the download
+      // For demo purposes, we'll create a mock download
+      const link = document.createElement('a');
+      link.href = '#';
+      link.download = `${selectedDoc.title}.${selectedDoc.type.toLowerCase()}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+    setDownloadDialogOpen(false);
+    setSelectedDoc(null);
+  };
+
+  const copyShareLink = () => {
+    if (selectedDoc) {
+      const shareUrl = `${window.location.origin}/share/${selectedDoc.id}`;
+      navigator.clipboard.writeText(shareUrl).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
+    }
+  };
+
+  const renderPaginationItems = () => {
+    const items = [];
+    const maxVisiblePages = 5;
+
+    if (totalPages <= maxVisiblePages) {
+      for (let i = 1; i <= totalPages; i++) {
+        items.push(
+          <PaginationItem key={i}>
+            <PaginationLink
+              isActive={currentPage === i}
+              onClick={() => handlePageChange(i)}
+            >
+              {i}
+            </PaginationLink>
+          </PaginationItem>
+        );
+      }
+    } else {
+      let startPage = Math.max(1, currentPage - 1);
+      let endPage = Math.min(totalPages, currentPage + 1);
+
+      if (currentPage <= 2) {
+        endPage = 3;
+      } else if (currentPage >= totalPages - 1) {
+        startPage = totalPages - 2;
+      }
+
+      items.push(
+        <PaginationItem key={1}>
+          <PaginationLink
+            isActive={currentPage === 1}
+            onClick={() => handlePageChange(1)}
+          >
+            1
+          </PaginationLink>
+        </PaginationItem>
+      );
+
+      if (startPage > 2) {
+        items.push(
+          <PaginationItem key="ellipsis-start">
+            <PaginationEllipsis />
+          </PaginationItem>
+        );
+      }
+
+      for (let i = startPage; i <= endPage; i++) {
+        if (i > 1 && i < totalPages) {
+          items.push(
+            <PaginationItem key={i}>
+              <PaginationLink
+                isActive={currentPage === i}
+                onClick={() => handlePageChange(i)}
+              >
+                {i}
+              </PaginationLink>
+            </PaginationItem>
+          );
+        }
+      }
+
+      if (endPage < totalPages - 1) {
+        items.push(
+          <PaginationItem key="ellipsis-end">
+            <PaginationEllipsis />
+          </PaginationItem>
+        );
+      }
+
+      items.push(
+        <PaginationItem key={totalPages}>
+          <PaginationLink
+            isActive={currentPage === totalPages}
+            onClick={() => handlePageChange(totalPages)}
+          >
+            {totalPages}
+          </PaginationLink>
+        </PaginationItem>
+      );
+    }
+
+    return items;
+  };
 
   return (
     <div className="min-h-screen">
-      {/* Stats Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/20 dark:to-blue-900/20 border-blue-200 dark:border-blue-800">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-blue-600 dark:text-blue-400">Total Documents</p>
-                <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">24</p>
-              </div>
-              <div className="h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center">
-                <FileText className="h-5 w-5 text-white" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950/20 dark:to-green-900/20 border-green-200 dark:border-green-800">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-green-600 dark:text-green-400">Ready to Chat</p>
-                <p className="text-2xl font-bold text-green-900 dark:text-green-100">22</p>
-              </div>
-              <div className="h-10 w-10 rounded-full bg-green-500 flex items-center justify-center">
-                <MessageSquare className="h-5 w-5 text-white" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-yellow-50 to-yellow-100 dark:from-yellow-950/20 dark:to-yellow-900/20 border-yellow-200 dark:border-yellow-800">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-yellow-600 dark:text-yellow-400">Processing</p>
-                <p className="text-2xl font-bold text-yellow-900 dark:text-yellow-100">2</p>
-              </div>
-              <div className="h-10 w-10 rounded-full bg-yellow-500 flex items-center justify-center">
-                <div className="h-2 w-2 bg-white rounded-full animate-pulse" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/20 dark:to-purple-900/20 border-purple-200 dark:border-purple-800">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-purple-600 dark:text-purple-400">Storage Used</p>
-                <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">45.2 MB</p>
-              </div>
-              <div className="h-10 w-10 rounded-full bg-purple-500 flex items-center justify-center">
-                <FileText className="h-5 w-5 text-white" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Recent Activity Section */}
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle>Recent Activity</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-              <div className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-full bg-green-500 flex items-center justify-center">
-                  <FileText className="h-4 w-4 text-white" />
-                </div>
-                <div>
-                  <p className="font-medium">Project Requirements.pdf</p>
-                  <p className="text-sm text-muted-foreground">Upload completed</p>
-                </div>
-              </div>
-              <span className="text-sm text-muted-foreground">2 hours ago</span>
-            </div>
-            
-            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-              <div className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center">
-                  <MessageSquare className="h-4 w-4 text-white" />
-                </div>
-                <div>
-                  <p className="font-medium">Chat session started</p>
-                  <p className="text-sm text-muted-foreground">With Research Paper Analysis</p>
-                </div>
-              </div>
-              <span className="text-sm text-muted-foreground">5 hours ago</span>
-            </div>
-            
-            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-              <div className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-full bg-yellow-500 flex items-center justify-center">
-                  <FileText className="h-4 w-4 text-white" />
-                </div>
-                <div>
-                  <p className="font-medium">Research Paper Analysis.docx</p>
-                  <p className="text-sm text-muted-foreground">Processing started</p>
-                </div>
-              </div>
-              <span className="text-sm text-muted-foreground">1 day ago</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Documents Grid */}
       <div>
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold">Your Documents</h2>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm">
-              Sort by: Newest
-            </Button>
+            <Select value={sortBy} onValueChange={handleSortChange}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Sort by..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Newest first</SelectItem>
+                <SelectItem value="oldest">Oldest first</SelectItem>
+                <SelectItem value="name-asc">Name A-Z</SelectItem>
+                <SelectItem value="name-desc">Name Z-A</SelectItem>
+                <SelectItem value="size-asc">Size: Small to Large</SelectItem>
+                <SelectItem value="size-desc">Size: Large to Small</SelectItem>
+              </SelectContent>
+            </Select>
             <Button variant="outline" size="sm">
               Filter
             </Button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
           {/* Upload New Card */}
           <Card 
             className="border-2 border-dashed border-muted-foreground/25 hover:border-primary/50 transition-all duration-200 cursor-pointer hover:shadow-md group h-full min-h-[280px] flex flex-col"
@@ -240,7 +325,7 @@ export function DocumentGrid() {
           </Card>
 
           {/* Document Cards */}
-          {mockDocuments.map((doc) => (
+          {currentDocuments.map((doc) => (
             <Card 
               key={doc.id}
               className="group hover:shadow-lg transition-all duration-200 cursor-pointer border-2 border-transparent hover:border-primary/20 h-full min-h-[280px] flex flex-col"
@@ -263,17 +348,17 @@ export function DocumentGrid() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenuItem onClick={(e) => handleDownloadClick(doc, e)}>
                         <Download className="h-4 w-4 mr-2" />
                         Download
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenuItem onClick={(e) => handleShareClick(doc, e)}>
                         <Share className="h-4 w-4 mr-2" />
                         Share
                       </DropdownMenuItem>
                       <DropdownMenuItem 
                         className="text-red-600 focus:text-red-600"
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={(e) => handleDeleteClick(doc, e)}
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
                         Delete
@@ -292,7 +377,8 @@ export function DocumentGrid() {
                     className={`text-xs ${statusVariants[doc.status]}`}
                     variant="outline"
                   >
-                    {doc.status === "processing" ? "Processing..." : "Ready"}
+                    {doc.status === "processing" ? "Processing..." : 
+                     doc.status === "error" ? "Error" : "Ready"}
                   </Badge>
                 </div>
               </CardHeader>
@@ -319,7 +405,7 @@ export function DocumentGrid() {
                     e.stopPropagation();
                     router.push(`/dashboard/chat/${doc.id}`);
                   }}
-                  disabled={doc.status === "processing"}
+                  disabled={doc.status === "processing" || doc.status === "error"}
                 >
                   <MessageSquare className="h-4 w-4" />
                   Chat with AI
@@ -328,7 +414,112 @@ export function DocumentGrid() {
             </Card>
           ))}
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex justify-center">
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious 
+                    onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                    className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+                
+                {renderPaginationItems()}
+                
+                <PaginationItem>
+                  <PaginationNext 
+                    onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                    className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Document</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{selectedDoc?.title}"? This action cannot be undone and the document will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteConfirm}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Share Dialog */}
+      <AlertDialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Share Document</AlertDialogTitle>
+            <AlertDialogDescription>
+              Share "{selectedDoc?.title}" with others. Anyone with the link will be able to view this document.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex items-center space-x-2">
+            <div className="grid flex-1 gap-2">
+              <div className="flex items-center space-x-2">
+                <div className="border rounded-md px-3 py-2 text-sm bg-muted flex-1 overflow-hidden">
+                  <span className="truncate">
+                    {selectedDoc ? `${window.location.origin}/share/${selectedDoc.id}` : ''}
+                  </span>
+                </div>
+                <Button 
+                  size="sm" 
+                  className="px-3"
+                  onClick={copyShareLink}
+                >
+                  {copied ? (
+                    <CheckCircle2 className="h-4 w-4" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                  <span className="sr-only">Copy</span>
+                </Button>
+              </div>
+              {copied && (
+                <p className="text-xs text-green-600">Link copied to clipboard!</p>
+              )}
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Close</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Download Confirmation Dialog */}
+      <AlertDialog open={downloadDialogOpen} onOpenChange={setDownloadDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Download Document</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to download "{selectedDoc?.title}"? The file will be saved to your device.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDownloadConfirm}>
+              Download
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
