@@ -1,6 +1,17 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+html, body {
+  height: 100%;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch; /* Pre iOS */
+}
+
+#__next {
+  height: 100%;
+  overflow: auto;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 :root {

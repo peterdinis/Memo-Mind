@@ -18,10 +18,15 @@ export default function DashboardLayout({
     <DashboardProvider>
       <SidebarProvider>
         <div className="flex h-screen w-full bg-background">
-          <DashboardSidebar />
-          <main className="flex-1 flex flex-col overflow-hidden w-full">
+          {/* Sidebar - normálny flow */}
+          <div className="shrink-0">
+            <DashboardSidebar />
+          </div>
+          
+          {/* Main content */}
+          <main className="flex-1 flex flex-col min-h-0 overflow-auto">
             <TransitionProvider>
-               {children}
+              {children}
             </TransitionProvider>
           </main>
         </div>
