@@ -1,6 +1,5 @@
 import { DocumentChat } from "@/components/dashboard/chat/ChatWrapper";
 import { DashboardNavbar } from "@/components/dashboard/DashboardNavbar";
-import { DocumentGrid } from "@/components/dashboard/DocumentGrid";
 
 export default function DashboardChatPage() {
   return (

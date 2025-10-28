@@ -22,13 +22,6 @@ export const metadata: Metadata = {
     locale: "en_US",
     siteName: "MemoMind",
   },
-  twitter: {
-    card: "summary_large_image",
-    title: "MemoMind - AI-Powered Document Intelligence",
-    description: "Chat with your documents using advanced AI technology powered by MemoMind",
-    creator: "@memomind",
-  },
-  manifest: "/manifest.json",
 };
 
 export default function RootLayout({
