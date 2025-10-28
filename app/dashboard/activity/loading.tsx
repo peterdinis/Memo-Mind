@@ -1,8 +1,8 @@
-import { Spinner } from "@/components/ui/spinner"
-import { Suspense } from "react"
+import { Spinner } from '@/components/ui/spinner';
+import { Suspense } from 'react';
 
 const Loading: React.FC = () => {
-    return <Suspense fallback={<Spinner />} />
-}
+    return <Suspense fallback={<Spinner />} />;
+};
 
-export default Loading
+export default Loading;
