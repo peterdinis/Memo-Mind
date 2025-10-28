@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Ubuntu } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { TransitionProvider } from "@/components/providers/TransitionProvider";
 
 // Configure the Inter font
 const ubuntu = Ubuntu({
@@ -45,7 +46,9 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
+          <TransitionProvider>
+            {children}
+          </TransitionProvider>
         </ThemeProvider>
       </body>
     </html>
