@@ -35,20 +35,20 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { 
-  FileText, 
-  MoreVertical, 
-  MessageSquare, 
+import {
+  FileText,
+  MoreVertical,
+  MessageSquare,
   Calendar,
   Download,
   Trash2,
   Share,
-  Plus,
   Copy,
   CheckCircle2
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import UploadCard from "../documents/UploadCard";
 
 // Mock data
 const mockDocuments = [
@@ -309,24 +309,11 @@ export function DocumentGrid() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
           {/* Upload New Card */}
-          <Card 
-            className="border-2 border-dashed border-muted-foreground/25 hover:border-primary/50 transition-all duration-200 cursor-pointer hover:shadow-md group h-full min-h-[280px] flex flex-col"
-            onClick={() => router.push("/dashboard/upload")}
-          >
-            <CardContent className="flex flex-col items-center justify-center flex-1 p-6">
-              <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-4 group-hover:bg-primary/20 transition-colors group-hover:scale-110 duration-200">
-                <Plus className="h-8 w-8 text-primary" />
-              </div>
-              <p className="font-semibold text-lg text-center mb-2">Upload New Document</p>
-              <p className="text-sm text-muted-foreground text-center">
-                PDF, DOCX, TXT files supported
-              </p>
-            </CardContent>
-          </Card>
+          <UploadCard />
 
           {/* Document Cards */}
           {currentDocuments.map((doc) => (
-            <Card 
+            <Card
               key={doc.id}
               className="group hover:shadow-lg transition-all duration-200 cursor-pointer border-2 border-transparent hover:border-primary/20 h-full min-h-[280px] flex flex-col"
               onClick={() => router.push(`/dashboard/documents/${doc.id}`)}
@@ -356,7 +343,7 @@ export function DocumentGrid() {
                         <Share className="h-4 w-4 mr-2" />
                         Share
                       </DropdownMenuItem>
-                      <DropdownMenuItem 
+                      <DropdownMenuItem
                         className="text-red-600 focus:text-red-600"
                         onClick={(e) => handleDeleteClick(doc, e)}
                       >
@@ -373,12 +360,12 @@ export function DocumentGrid() {
                   <Badge variant="secondary" className="text-xs">
                     {doc.type}
                   </Badge>
-                  <Badge 
+                  <Badge
                     className={`text-xs ${statusVariants[doc.status]}`}
                     variant="outline"
                   >
-                    {doc.status === "processing" ? "Processing..." : 
-                     doc.status === "error" ? "Error" : "Ready"}
+                    {doc.status === "processing" ? "Processing..." :
+                      doc.status === "error" ? "Error" : "Ready"}
                   </Badge>
                 </div>
               </CardHeader>
@@ -396,8 +383,8 @@ export function DocumentGrid() {
                     </div>
                   </div>
                 </div>
-                
-                <Button 
+
+                <Button
                   className="w-full gap-2"
                   variant="default"
                   size="sm"
@@ -421,16 +408,16 @@ export function DocumentGrid() {
             <Pagination>
               <PaginationContent>
                 <PaginationItem>
-                  <PaginationPrevious 
+                  <PaginationPrevious
                     onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
                     className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
                   />
                 </PaginationItem>
-                
+
                 {renderPaginationItems()}
-                
+
                 <PaginationItem>
-                  <PaginationNext 
+                  <PaginationNext
                     onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
                     className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
                   />
@@ -452,7 +439,7 @@ export function DocumentGrid() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={handleDeleteConfirm}
               className="bg-red-600 hover:bg-red-700 text-white"
             >
@@ -479,8 +466,8 @@ export function DocumentGrid() {
                     {selectedDoc ? `${window.location.origin}/share/${selectedDoc.id}` : ''}
                   </span>
                 </div>
-                <Button 
-                  size="sm" 
+                <Button
+                  size="sm"
                   className="px-3"
                   onClick={copyShareLink}
                 >

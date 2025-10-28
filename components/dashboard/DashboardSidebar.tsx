@@ -14,10 +14,6 @@ import {
 import {
   BookOpen,
   Home,
-  FileText,
-  Plus,
-  Settings,
-  Users,
   MessageSquare,
   Activity,
 } from "lucide-react";
@@ -38,12 +34,7 @@ const menuItems = [
     title: "Chat",
     url: "/dashboard/chat",
     icon: MessageSquare,
-  },
-  {
-    title: "Settings",
-    url: "/dashboard/settings",
-    icon: Settings,
-  },
+  }
 ];
 
 export function DashboardSidebar() {

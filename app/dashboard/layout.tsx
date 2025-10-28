@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { DashboardProvider } from "@/components/providers/dashboard-provider";
 import { SidebarProvider } from "@/components/ui/sidebar";
+import { TransitionProvider } from "@/components/providers/TransitionProvider";
 
 export const metadata: Metadata = {
   title: "Dashboard - MemoMind",
@@ -19,7 +20,9 @@ export default function DashboardLayout({
         <div className="flex h-screen w-full bg-background">
           <DashboardSidebar />
           <main className="flex-1 flex flex-col overflow-hidden w-full">
-            {children}
+            <TransitionProvider>
+               {children}
+            </TransitionProvider>
           </main>
         </div>
       </SidebarProvider>
