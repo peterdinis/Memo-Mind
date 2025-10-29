@@ -26,7 +26,7 @@ import { SearchDialog } from '../search/SearchDialog';
 
 export function DashboardNavbar() {
     const pathname = usePathname();
-    const router = useRouter()
+    const router = useRouter();
     const getBreadcrumbItems = () => {
         const paths = pathname.split('/').filter((path) => path);
         if (paths[0] === 'dashboard') paths[0] = 'Dashboard';
@@ -144,13 +144,15 @@ export function DashboardNavbar() {
                     <SearchDialog
                         onSearch={async (query) => {
                             // Simulácia API volania
-                            const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`)
-                            const data = await response.json()
-                            return data.results
+                            const response = await fetch(
+                                `/api/search?q=${encodeURIComponent(query)}`,
+                            );
+                            const data = await response.json();
+                            return data.results;
                         }}
                         onSelect={(item) => {
                             // Navigácia na detail
-                            router.push(`/items/${item.id}`)
+                            router.push(`/items/${item.id}`);
                         }}
                     />
                 </div>

@@ -6,14 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
-import {
-    FileText,
-    Send,
-    Download,
-    ArrowLeft,
-    Bot,
-    User,
-} from 'lucide-react';
+import { FileText, Send, Download, ArrowLeft, Bot, User } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 // Mock document data
@@ -128,23 +121,23 @@ export function DocumentChat() {
             doc.addPage();
             doc.setFontSize(16);
             doc.text('Chat History', 20, 20);
-            
+
             let yPosition = 35;
             messages.forEach((message, index) => {
                 if (yPosition > 270) {
                     doc.addPage();
                     yPosition = 20;
                 }
-                
+
                 doc.setFontSize(10);
                 const role = message.role === 'user' ? 'User' : 'Assistant';
                 const timestamp = message.timestamp.toLocaleString();
                 doc.text(`${role} (${timestamp}):`, 20, yPosition);
-                
+
                 yPosition += 7;
                 const messageLines = doc.splitTextToSize(message.content, 170);
                 doc.text(messageLines, 20, yPosition);
-                
+
                 yPosition += messageLines.length * 7 + 10;
             });
         }
@@ -194,21 +187,25 @@ export function DocumentChat() {
                     </div>
                     <div className='flex items-center gap-2'>
                         {/* Download dropdown menu */}
-                        <div className="relative group">
-                            <Button variant='outline' size='sm' className="flex items-center gap-2">
+                        <div className='group relative'>
+                            <Button
+                                variant='outline'
+                                size='sm'
+                                className='flex items-center gap-2'
+                            >
                                 <Download className='h-4 w-4' />
                                 Download
                             </Button>
-                            <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+                            <div className='invisible absolute top-full right-0 z-10 mt-1 w-48 rounded-md border border-gray-200 bg-white opacity-0 shadow-lg transition-all duration-200 group-hover:visible group-hover:opacity-100 dark:border-gray-700 dark:bg-gray-800'>
                                 <button
                                     onClick={handleDownloadPDF}
-                                    className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 first:rounded-t-md last:rounded-b-md"
+                                    className='w-full px-4 py-2 text-left text-sm first:rounded-t-md last:rounded-b-md hover:bg-gray-100 dark:hover:bg-gray-700'
                                 >
                                     Download as PDF
                                 </button>
                                 <button
                                     onClick={handleDownloadTxt}
-                                    className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 first:rounded-t-md last:rounded-b-md"
+                                    className='w-full px-4 py-2 text-left text-sm first:rounded-t-md last:rounded-b-md hover:bg-gray-100 dark:hover:bg-gray-700'
                                 >
                                     Download as Text
                                 </button>
@@ -268,16 +265,18 @@ export function DocumentChat() {
                                 {messages.map((message) => (
                                     <div
                                         key={message.id}
-                                        className={`flex gap-3 ${message.role === 'user'
+                                        className={`flex gap-3 ${
+                                            message.role === 'user'
                                                 ? 'flex-row-reverse'
                                                 : 'flex-row'
-                                            }`}
+                                        }`}
                                     >
                                         <div
-                                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${message.role === 'user'
+                                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+                                                message.role === 'user'
                                                     ? 'bg-primary text-primary-foreground'
                                                     : 'bg-green-100 text-green-600 dark:bg-green-900/20'
-                                                }`}
+                                            }`}
                                         >
                                             {message.role === 'user' ? (
                                                 <User className='h-4 w-4' />
@@ -286,16 +285,18 @@ export function DocumentChat() {
                                             )}
                                         </div>
                                         <div
-                                            className={`flex-1 space-y-2 ${message.role === 'user'
+                                            className={`flex-1 space-y-2 ${
+                                                message.role === 'user'
                                                     ? 'text-right'
                                                     : 'text-left'
-                                                }`}
+                                            }`}
                                         >
                                             <div
-                                                className={`inline-block rounded-lg px-4 py-2 ${message.role === 'user'
+                                                className={`inline-block rounded-lg px-4 py-2 ${
+                                                    message.role === 'user'
                                                         ? 'bg-primary text-primary-foreground'
                                                         : 'bg-muted'
-                                                    }`}
+                                                }`}
                                             >
                                                 <p className='text-sm'>
                                                     {message.content}
