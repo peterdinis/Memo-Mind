@@ -3,6 +3,7 @@ import { Inter, Ubuntu } from 'next/font/google';
 import './globals.css';
 import { ThemeProvider } from '@/components/providers/theme-provider';
 import { TransitionProvider } from '@/components/providers/TransitionProvider';
+import { ScrollToTop } from '@/components/shared/ScrollToTop';
 
 // Configure the Inter font
 const ubuntu = Ubuntu({
@@ -53,7 +54,10 @@ export default function RootLayout({
                     enableSystem
                     disableTransitionOnChange
                 >
-                    <TransitionProvider>{children}</TransitionProvider>
+                    <TransitionProvider>
+                        {children}
+                        <ScrollToTop />
+                    </TransitionProvider>
                 </ThemeProvider>
             </body>
         </html>
