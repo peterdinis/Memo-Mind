@@ -5,19 +5,16 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { forgotPasswordSchema } from '@/schemas/authSchemas'
-import { forgotPasswordAction } from '@/actions/auth'
 import { Button } from '@/components/ui/button'
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form'
+  Field,
+  FieldLabel,
+  FieldError,
+} from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
+import { forgotPasswordAction } from '@/actions/authActions'
 
 type FormData = z.infer<typeof forgotPasswordSchema>
 
@@ -53,26 +50,26 @@ export const ForgotPasswordForm = () => {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email</FormLabel>
-                  <FormControl>
-                    <Input placeholder="m@example.com" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <Field
+            className="group/field"
+            data-invalid={!!form.formState.errors.email}
+          >
+            <FieldLabel>Email</FieldLabel>
+            <Input 
+              placeholder="m@example.com" 
+              {...form.register('email')}
+              className={form.formState.errors.email ? "border-destructive" : ""}
             />
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Sending...' : 'Send Reset Instructions'}
-            </Button>
-          </form>
-        </Form>
+            {form.formState.errors.email && (
+              <FieldError>{form.formState.errors.email.message}</FieldError>
+            )}
+          </Field>
+
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? 'Sending...' : 'Send Reset Instructions'}
+          </Button>
+        </form>
       </CardContent>
     </Card>
   )

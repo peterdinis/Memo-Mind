@@ -6,6 +6,28 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
+import React from "react"
+import { Input } from "./input"
+
+export interface FieldInputProps
+  extends React.InputHTMLAttributes<HTMLInputElement> {}
+
+const FieldInput = React.forwardRef<HTMLInputElement, FieldInputProps>(
+  ({ className, type, ...props }, ref) => {
+    return (
+      <Input
+        type={type}
+        className={cn(
+          "w-full",
+          className
+        )}
+        ref={ref}
+        {...props}
+      />
+    )
+  }
+)
+FieldInput.displayName = "FieldInput"
 
 function FieldSet({ className, ...props }: React.ComponentProps<"fieldset">) {
   return (
@@ -234,6 +256,32 @@ function FieldError({
   )
 }
 
+const FieldControl = ({ className, ...props }: React.ComponentProps<"div">) => {
+  return (
+    <div
+      data-slot="field-control"
+      className={cn(
+        "flex flex-col gap-1.5",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+const FieldMessage = ({ className, ...props }: React.ComponentProps<"p">) => {
+  return (
+    <p
+      data-slot="field-message"
+      className={cn(
+        "text-sm text-muted-foreground",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
 export {
   Field,
   FieldLabel,
@@ -245,4 +293,7 @@ export {
   FieldSet,
   FieldContent,
   FieldTitle,
+  FieldInput,
+  FieldControl,
+  FieldMessage
 }
