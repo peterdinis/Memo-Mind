@@ -18,13 +18,15 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { User, Settings, LogOut, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ModeToggle } from '../shared/ModeToggle';
+import { SearchDialog } from '../search/SearchDialog';
 
 export function DashboardNavbar() {
     const pathname = usePathname();
-
+    const router = useRouter();
     const getBreadcrumbItems = () => {
         const paths = pathname.split('/').filter((path) => path);
         if (paths[0] === 'dashboard') paths[0] = 'Dashboard';
@@ -137,6 +139,22 @@ export function DashboardNavbar() {
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
+
+                    <ModeToggle />
+                    <SearchDialog
+                        onSearch={async (query) => {
+                            // Simulácia API volania
+                            const response = await fetch(
+                                `/api/search?q=${encodeURIComponent(query)}`,
+                            );
+                            const data = await response.json();
+                            return data.results;
+                        }}
+                        onSelect={(item) => {
+                            // Navigácia na detail
+                            router.push(`/items/${item.id}`);
+                        }}
+                    />
                 </div>
             </div>
         </header>

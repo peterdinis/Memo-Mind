@@ -3,6 +3,7 @@ import { DashboardSidebar } from '@/components/dashboard/DashboardSidebar';
 import { DashboardProvider } from '@/components/providers/dashboard-provider';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { TransitionProvider } from '@/components/providers/TransitionProvider';
+import { ScrollToTop } from '@/components/shared/ScrollToTop';
 
 export const metadata: Metadata = {
     title: 'Dashboard - MemoMind',
@@ -23,7 +24,10 @@ export default function DashboardLayout({
                     </div>
 
                     <main className='flex min-h-0 flex-1 flex-col overflow-auto'>
-                        <TransitionProvider>{children}</TransitionProvider>
+                        <TransitionProvider>
+                            {children}
+                            <ScrollToTop />
+                        </TransitionProvider>
                     </main>
                 </div>
             </SidebarProvider>
