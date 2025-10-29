@@ -6,15 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
-import {
-    FileText,
-    Send,
-    Download,
-    Share,
-    ArrowLeft,
-    Bot,
-    User,
-} from 'lucide-react';
+import { FileText, Send, Download, ArrowLeft, Bot, User } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 // Mock document data
@@ -103,6 +95,68 @@ export function DocumentChat() {
         }
     };
 
+    // PDF Download Function
+    const handleDownloadPDF = () => {
+        // Create a new jsPDF instance
+        const { jsPDF } = require('jspdf');
+        const doc = new jsPDF();
+
+        // Add title
+        doc.setFontSize(20);
+        doc.text(mockDocument.title, 20, 20);
+
+        // Add document metadata
+        doc.setFontSize(12);
+        doc.text(`Type: ${mockDocument.type}`, 20, 35);
+        doc.text(`Size: ${mockDocument.size}`, 20, 42);
+        doc.text(`Uploaded: ${mockDocument.uploadedAt}`, 20, 49);
+
+        // Add content
+        doc.setFontSize(14);
+        const contentLines = doc.splitTextToSize(mockDocument.content, 170);
+        doc.text(contentLines, 20, 65);
+
+        // Add chat history if needed
+        if (messages.length > 1) {
+            doc.addPage();
+            doc.setFontSize(16);
+            doc.text('Chat History', 20, 20);
+
+            let yPosition = 35;
+            messages.forEach((message, index) => {
+                if (yPosition > 270) {
+                    doc.addPage();
+                    yPosition = 20;
+                }
+
+                doc.setFontSize(10);
+                const role = message.role === 'user' ? 'User' : 'Assistant';
+                const timestamp = message.timestamp.toLocaleString();
+                doc.text(`${role} (${timestamp}):`, 20, yPosition);
+
+                yPosition += 7;
+                const messageLines = doc.splitTextToSize(message.content, 170);
+                doc.text(messageLines, 20, yPosition);
+
+                yPosition += messageLines.length * 7 + 10;
+            });
+        }
+
+        // Save the PDF
+        doc.save(`${mockDocument.title.replace(/\s+/g, '_')}.pdf`);
+    };
+
+    // Alternative: Download only document content as text file
+    const handleDownloadTxt = () => {
+        const element = document.createElement('a');
+        const file = new Blob([mockDocument.content], { type: 'text/plain' });
+        element.href = URL.createObjectURL(file);
+        element.download = `${mockDocument.title.replace(/\s+/g, '_')}.txt`;
+        document.body.appendChild(element);
+        element.click();
+        document.body.removeChild(element);
+    };
+
     const suggestedQuestions = [
         'What are the main functional requirements?',
         'What technologies are being used?',
@@ -132,14 +186,31 @@ export function DocumentChat() {
                         </div>
                     </div>
                     <div className='flex items-center gap-2'>
-                        <Button variant='outline' size='sm'>
-                            <Download className='mr-2 h-4 w-4' />
-                            Download
-                        </Button>
-                        <Button variant='outline' size='sm'>
-                            <Share className='mr-2 h-4 w-4' />
-                            Share
-                        </Button>
+                        {/* Download dropdown menu */}
+                        <div className='group relative'>
+                            <Button
+                                variant='outline'
+                                size='sm'
+                                className='flex items-center gap-2'
+                            >
+                                <Download className='h-4 w-4' />
+                                Download
+                            </Button>
+                            <div className='invisible absolute top-full right-0 z-10 mt-1 w-48 rounded-md border border-gray-200 bg-white opacity-0 shadow-lg transition-all duration-200 group-hover:visible group-hover:opacity-100 dark:border-gray-700 dark:bg-gray-800'>
+                                <button
+                                    onClick={handleDownloadPDF}
+                                    className='w-full px-4 py-2 text-left text-sm first:rounded-t-md last:rounded-b-md hover:bg-gray-100 dark:hover:bg-gray-700'
+                                >
+                                    Download as PDF
+                                </button>
+                                <button
+                                    onClick={handleDownloadTxt}
+                                    className='w-full px-4 py-2 text-left text-sm first:rounded-t-md last:rounded-b-md hover:bg-gray-100 dark:hover:bg-gray-700'
+                                >
+                                    Download as Text
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </header>

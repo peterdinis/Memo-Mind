@@ -42,7 +42,6 @@ import {
     Calendar,
     Download,
     Trash2,
-    Share,
     Copy,
     CheckCircle2,
 } from 'lucide-react';
@@ -386,14 +385,6 @@ export function DocumentGrid() {
                                             >
                                                 <Download className='mr-2 h-4 w-4' />
                                                 Download
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem
-                                                onClick={(e) =>
-                                                    handleShareClick(doc, e)
-                                                }
-                                            >
-                                                <Share className='mr-2 h-4 w-4' />
-                                                Share
                                             </DropdownMenuItem>
                                             <DropdownMenuItem
                                                 className='text-red-600 focus:text-red-600'
