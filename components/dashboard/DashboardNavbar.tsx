@@ -21,6 +21,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { usePathname } from 'next/navigation';
 import { User, Settings, LogOut, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ModeToggle } from '../shared/ModeToggle';
 
 export function DashboardNavbar() {
     const pathname = usePathname();
@@ -137,6 +138,8 @@ export function DashboardNavbar() {
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
+
+                    <ModeToggle />
                 </div>
             </div>
         </header>

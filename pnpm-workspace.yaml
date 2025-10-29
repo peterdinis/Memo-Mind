@@ -1,3 +1,4 @@
 onlyBuiltDependencies:
-    - sharp
-    - unrs-resolver
+  - core-js
+  - sharp
+  - unrs-resolver
