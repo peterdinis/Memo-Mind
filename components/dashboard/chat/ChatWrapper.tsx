@@ -10,7 +10,6 @@ import {
     FileText,
     Send,
     Download,
-    Share,
     ArrowLeft,
     Bot,
     User,
@@ -136,10 +135,6 @@ export function DocumentChat() {
                             <Download className='mr-2 h-4 w-4' />
                             Download
                         </Button>
-                        <Button variant='outline' size='sm'>
-                            <Share className='mr-2 h-4 w-4' />
-                            Share
-                        </Button>
                     </div>
                 </div>
             </header>
@@ -194,18 +189,16 @@ export function DocumentChat() {
                                 {messages.map((message) => (
                                     <div
                                         key={message.id}
-                                        className={`flex gap-3 ${
-                                            message.role === 'user'
+                                        className={`flex gap-3 ${message.role === 'user'
                                                 ? 'flex-row-reverse'
                                                 : 'flex-row'
-                                        }`}
+                                            }`}
                                     >
                                         <div
-                                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-                                                message.role === 'user'
+                                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${message.role === 'user'
                                                     ? 'bg-primary text-primary-foreground'
                                                     : 'bg-green-100 text-green-600 dark:bg-green-900/20'
-                                            }`}
+                                                }`}
                                         >
                                             {message.role === 'user' ? (
                                                 <User className='h-4 w-4' />
@@ -214,18 +207,16 @@ export function DocumentChat() {
                                             )}
                                         </div>
                                         <div
-                                            className={`flex-1 space-y-2 ${
-                                                message.role === 'user'
+                                            className={`flex-1 space-y-2 ${message.role === 'user'
                                                     ? 'text-right'
                                                     : 'text-left'
-                                            }`}
+                                                }`}
                                         >
                                             <div
-                                                className={`inline-block rounded-lg px-4 py-2 ${
-                                                    message.role === 'user'
+                                                className={`inline-block rounded-lg px-4 py-2 ${message.role === 'user'
                                                         ? 'bg-primary text-primary-foreground'
                                                         : 'bg-muted'
-                                                }`}
+                                                    }`}
                                             >
                                                 <p className='text-sm'>
                                                     {message.content}
