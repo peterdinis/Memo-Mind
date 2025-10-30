@@ -17,11 +17,14 @@ import {
 import Link from 'next/link';
 import { useAuth } from '@/hooks/auth/useAuth';
 import AuthWrapper from './AuthWrapper';
+import { Eye, EyeOff } from 'lucide-react';
+import { useState } from 'react';
 
 type FormData = z.infer<typeof signUpSchema>;
 
 export const SignUpForm = () => {
     const { signUp, signingUp } = useAuth();
+    const [showPassword, setShowPassword] = useState(false);
 
     const form = useForm<FormData>({
         resolver: zodResolver(signUpSchema),
@@ -34,6 +37,10 @@ export const SignUpForm = () => {
 
     const onSubmit = (data: FormData) => {
         signUp(data);
+    };
+
+    const togglePasswordVisibility = () => {
+        setShowPassword(!showPassword);
     };
 
     return (
@@ -97,15 +104,35 @@ export const SignUpForm = () => {
                             data-invalid={!!form.formState.errors.password}
                         >
                             <FieldLabel>Password</FieldLabel>
-                            <Input
-                                type='password'
-                                {...form.register('password')}
-                                className={
-                                    form.formState.errors.password
-                                        ? 'border-destructive'
-                                        : ''
-                                }
-                            />
+                            <div className='relative'>
+                                <Input
+                                    type={showPassword ? 'text' : 'password'}
+                                    {...form.register('password')}
+                                    className={
+                                        form.formState.errors.password
+                                            ? 'border-destructive pr-10'
+                                            : 'pr-10'
+                                    }
+                                />
+                                <Button
+                                    type='button'
+                                    variant='ghost'
+                                    size='sm'
+                                    className='absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent'
+                                    onClick={togglePasswordVisibility}
+                                >
+                                    {showPassword ? (
+                                        <EyeOff className='h-4 w-4 text-muted-foreground' />
+                                    ) : (
+                                        <Eye className='h-4 w-4 text-muted-foreground' />
+                                    )}
+                                    <span className='sr-only'>
+                                        {showPassword
+                                            ? 'Hide password'
+                                            : 'Show password'}
+                                    </span>
+                                </Button>
+                            </div>
                             {form.formState.errors.password && (
                                 <FieldError>
                                     {form.formState.errors.password.message}

@@ -1,6 +1,5 @@
 'use client';
 
-import { useAction } from 'next-safe-action/hooks';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -15,26 +14,14 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
-import { toast } from 'sonner';
-import { forgotPasswordAction } from '@/actions/authActions';
+import Link from 'next/link';
+import { useAuth } from '@/hooks/auth/useAuth';
 import AuthWrapper from './AuthWrapper';
 
 type FormData = z.infer<typeof forgotPasswordSchema>;
 
 export const ForgotPasswordForm = () => {
-    const { execute: forgotPassword, isExecuting: loading } = useAction(
-        forgotPasswordAction,
-        {
-            onSuccess: (data) => {
-                toast.success('Email sent', {
-                    description: data.data.message,
-                });
-            },
-            onError: (error) => {
-                toast.error(error.error.serverError);
-            },
-        },
-    );
+    const { forgotPassword, resettingPassword } = useAuth();
 
     const form = useForm<FormData>({
         resolver: zodResolver(forgotPasswordSchema),
@@ -85,11 +72,23 @@ export const ForgotPasswordForm = () => {
                         <Button
                             type='submit'
                             className='w-full'
-                            disabled={loading}
+                            disabled={resettingPassword}
                         >
-                            {loading ? 'Sending...' : 'Send Reset Instructions'}
+                            {resettingPassword ? 'Sending...' : 'Send Reset Instructions'}
                         </Button>
                     </form>
+                    <div className='mt-4 text-center text-sm'>
+                        Remember your password?{' '}
+                        <Link href='/sign-in' className='underline'>
+                            Sign in
+                        </Link>
+                    </div>
+                    <div className='mt-2 text-center text-sm'>
+                        Don&apos;t have an account?{' '}
+                        <Link href='/sign-up' className='underline'>
+                            Sign up
+                        </Link>
+                    </div>
                 </CardContent>
             </Card>
         </AuthWrapper>
