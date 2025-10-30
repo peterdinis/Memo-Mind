@@ -1,19 +1,17 @@
-"use client"
+'use client';
 
-import { FC, ReactNode } from "react";
+import { FC, ReactNode } from 'react';
 
 type AuthWrapperProps = {
-    children?: ReactNode
-}
+    children?: ReactNode;
+};
 
-const AuthWrapper: FC<AuthWrapperProps> = ({
-    children
-}: AuthWrapperProps) => {
+const AuthWrapper: FC<AuthWrapperProps> = ({ children }: AuthWrapperProps) => {
     return (
-        <section className="flex justify-center items-center mt-10">
+        <section className='mt-10 flex items-center justify-center'>
             {children}
         </section>
-    )
-}
+    );
+};
 
-export default AuthWrapper
+export default AuthWrapper;

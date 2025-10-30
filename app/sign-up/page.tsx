@@ -1,8 +1,8 @@
-import { SignUpForm } from "@/components/auth/SignupForm";
-import { NextPage } from "next";
+import { SignUpForm } from '@/components/auth/SignupForm';
+import { NextPage } from 'next';
 
 const SignupPage: NextPage = () => {
-    return <SignUpForm />
-}
+    return <SignUpForm />;
+};
 
-export default SignupPage
+export default SignupPage;
