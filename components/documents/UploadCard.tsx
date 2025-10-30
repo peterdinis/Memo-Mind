@@ -6,6 +6,9 @@ import { useForm } from '@tanstack/react-form';
 import { Plus, FileText, X } from 'lucide-react';
 import { Card, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
+import { useAction } from 'next-safe-action/hooks';
+import { uploadFileAction } from '@/actions/uploadActions';
+import { toast } from 'sonner';
 
 interface UploadedFile {
     file: File;
@@ -14,19 +17,57 @@ interface UploadedFile {
 }
 
 const UploadCard: FC = () => {
+    const { execute: uploadFiles, isPending: isUploading } = useAction(uploadFileAction, {
+        onSuccess: (data) => {
+            toast.success(data.data?.message || 'Files uploaded successfully');
+            form.reset();
+        },
+        onError: (error) => {
+            toast.error('Failed to upload files');
+        },
+    });
+
     const form = useForm({
         defaultValues: {
             files: [] as UploadedFile[],
         },
         onSubmit: async ({ value }) => {
-            console.log('Uploading files:', value.files);
-            // Tu môžete spracovať upload súborov
-            // Napríklad odoslať na server
+            if (value.files.length === 0) return;
 
-            // Reset formulára po úspešnom odoslaní
-            form.reset();
+            const toastId = toast.loading('Uploading files...');
+
+            // Convert files to base64 for server action
+            const filesWithData = await Promise.all(
+                value.files.map(async (uploadedFile) => {
+                    const base64 = await fileToBase64(uploadedFile.file);
+                    return {
+                        name: uploadedFile.file.name,
+                        type: uploadedFile.file.type,
+                        size: uploadedFile.file.size,
+                        data: base64,
+                    };
+                })
+            );
+
+            // Execute upload action
+            uploadFiles({ 
+                files: filesWithData,
+                folder: 'documents'
+            });
+
+            // Toast sa zavrie automaticky cez onSuccess/onError
         },
     });
+
+    // Helper function to convert File to base64
+    const fileToBase64 = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = error => reject(error);
+        });
+    };
 
     const onDrop = useCallback(
         (acceptedFiles: File[]) => {
@@ -40,16 +81,29 @@ const UploadCard: FC = () => {
 
             const currentFiles = form.getFieldValue('files');
             form.setFieldValue('files', [...currentFiles, ...newFiles]);
+
+            if (newFiles.length > 0) {
+                toast.success(`Added ${newFiles.length} file(s) to upload list`);
+            }
         },
         [form],
     );
 
     const removeFile = (fileId: string) => {
         const currentFiles = form.getFieldValue('files');
+        const fileToRemove = currentFiles.find((f: UploadedFile) => f.id === fileId);
+        
+        // Clean up object URLs
+        if (fileToRemove?.preview) {
+            URL.revokeObjectURL(fileToRemove.preview);
+        }
+
         const updatedFiles = currentFiles.filter(
             (f: UploadedFile) => f.id !== fileId,
         );
         form.setFieldValue('files', updatedFiles);
+
+        toast.info('File removed from upload list');
     };
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -140,6 +194,7 @@ const UploadCard: FC = () => {
                                             removeFile(uploadedFile.id)
                                         }
                                         className='hover:bg-destructive/10 hover:text-destructive h-8 w-8 p-0'
+                                        disabled={isUploading}
                                     >
                                         <X className='h-4 w-4' />
                                     </Button>
@@ -151,10 +206,16 @@ const UploadCard: FC = () => {
                         <div className='flex justify-end pt-2'>
                             <Button
                                 type='submit'
-                                disabled={uploadedFiles.length === 0}
+                                disabled={uploadedFiles.length === 0 || isUploading}
                             >
-                                Upload {uploadedFiles.length} file
-                                {uploadedFiles.length !== 1 ? 's' : ''}
+                                {isUploading ? (
+                                    <>Uploading...</>
+                                ) : (
+                                    <>
+                                        Upload {uploadedFiles.length} file
+                                        {uploadedFiles.length !== 1 ? 's' : ''}
+                                    </>
+                                )}
                             </Button>
                         </div>
                     </div>
