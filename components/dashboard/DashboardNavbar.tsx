@@ -23,10 +23,13 @@ import { User, Settings, LogOut, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ModeToggle } from '../shared/ModeToggle';
 import { SearchDialog } from '../search/SearchDialog';
+import { useAuth } from '@/hooks/auth/useAuth';
 
 export function DashboardNavbar() {
     const pathname = usePathname();
     const router = useRouter();
+    const { user, profile, signOut } = useAuth();
+
     const getBreadcrumbItems = () => {
         const paths = pathname.split('/').filter((path) => path);
         if (paths[0] === 'dashboard') paths[0] = 'Dashboard';
@@ -45,6 +48,42 @@ export function DashboardNavbar() {
     };
 
     const breadcrumbItems = getBreadcrumbItems();
+
+    // Funkcia pre získanie iniciál z mena alebo emailu
+    const getInitials = () => {
+        if (profile?.full_name) {
+            return profile.full_name
+                .split(' ')
+                .map((name: string) => name[0])
+                .join('')
+                .toUpperCase()
+                .slice(0, 2);
+        }
+        if (user?.email) {
+            return user.email.slice(0, 2).toUpperCase();
+        }
+        return 'U';
+    };
+
+    // Funkcia pre získanie zobrazovaného mena
+    const getDisplayName = () => {
+        if (profile?.full_name) {
+            return profile.full_name;
+        }
+        if (user?.email) {
+            return user.email.split('@')[0];
+        }
+        return 'User';
+    };
+
+    // Funkcia pre získanie emailu
+    const getDisplayEmail = () => {
+        return user?.email || 'No email';
+    };
+
+    const handleLogout = async () => {
+        await signOut({});
+    };
 
     return (
         <header className='bg-background/95 border-border sticky top-0 z-30 border-b backdrop-blur-sm'>
@@ -82,7 +121,7 @@ export function DashboardNavbar() {
                     )}
                 </div>
 
-                {/* Profilový dropdown */}
+                {/* Profile dropdown */}
                 <div className='flex items-center gap-4'>
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -92,15 +131,15 @@ export function DashboardNavbar() {
                             >
                                 <Avatar className='h-8 w-8'>
                                     <AvatarImage
-                                        src='/avatars/user.jpg'
-                                        alt='Profil'
+                                        src={profile?.avatar_url || '/avatars/user.jpg'}
+                                        alt='Profile'
                                     />
                                     <AvatarFallback className='bg-primary text-primary-foreground'>
-                                        JN
+                                        {getInitials()}
                                     </AvatarFallback>
                                 </Avatar>
                                 <span className='sr-only'>
-                                    Otvoriť profilové menu
+                                    Open profile menu
                                 </span>
                             </Button>
                         </DropdownMenuTrigger>
@@ -112,30 +151,20 @@ export function DashboardNavbar() {
                             <DropdownMenuLabel className='font-normal'>
                                 <div className='flex flex-col space-y-1'>
                                     <p className='text-sm leading-none font-medium'>
-                                        Ján Novák
+                                        {getDisplayName()}
                                     </p>
                                     <p className='text-muted-foreground text-xs leading-none'>
-                                        jan.novak@example.com
+                                        {getDisplayEmail()}
                                     </p>
                                 </div>
                             </DropdownMenuLabel>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem>
-                                <User className='mr-2 h-4 w-4' />
-                                <span>Profil</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                                <CreditCard className='mr-2 h-4 w-4' />
-                                <span>Fakturácia</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                                <Settings className='mr-2 h-4 w-4' />
-                                <span>Nastavenia</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className='text-destructive focus:text-destructive'>
+                            <DropdownMenuItem 
+                                onClick={handleLogout}
+                                className='text-destructive focus:text-destructive cursor-pointer'
+                            >
                                 <LogOut className='mr-2 h-4 w-4' />
-                                <span>Odhlásiť sa</span>
+                                <span>Log out</span>
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
@@ -143,7 +172,7 @@ export function DashboardNavbar() {
                     <ModeToggle />
                     <SearchDialog
                         onSearch={async (query) => {
-                            // Simulácia API volania
+                            // Simulate API call
                             const response = await fetch(
                                 `/api/search?q=${encodeURIComponent(query)}`,
                             );
@@ -151,7 +180,6 @@ export function DashboardNavbar() {
                             return data.results;
                         }}
                         onSelect={(item) => {
-                            // Navigácia na detail
                             router.push(`/items/${item.id}`);
                         }}
                     />

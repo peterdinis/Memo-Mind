@@ -28,6 +28,7 @@ export const useAuth = () => {
         {
             onSuccess: (data) => {
                 toast.success('Successfully signed in');
+                router.push('/dashboard'); // Presmerovanie na dashboard po prihlásení
                 router.refresh();
             },
             onError: (error) => {
@@ -44,8 +45,10 @@ export const useAuth = () => {
                     toast.success('Check your email', {
                         description: "We've sent you a verification link",
                     });
+                    router.push('/sign-in'); // Presmerovanie na prihlásenie po registrácii
                 } else {
                     toast.success('Account created successfully');
+                    router.push('/dashboard'); // Ak nepotrebuje verifikáciu, presmeruj na dashboard
                 }
                 router.refresh();
             },
@@ -60,6 +63,7 @@ export const useAuth = () => {
             setUser(null);
             setProfile(null);
             toast.success('You have been signed out');
+            router.push('/sign-in'); // Presmerovanie na prihlásenie po odhlásení
             router.refresh();
         },
         onError: (error) => {
@@ -74,6 +78,7 @@ export const useAuth = () => {
                 toast.success('Email sent', {
                     description: data.data.message,
                 });
+                router.push('/sign-in'); // Presmerovanie na prihlásenie po odoslaní verifikačného emailu
             },
             onError: (error) => {
                 toast.error(error.error.serverError);
@@ -87,11 +92,13 @@ export const useAuth = () => {
                 toast.success('Email sent', {
                     description: data.data.message,
                 });
+                router.push('/sign-in'); // Presmerovanie na prihlásenie po odoslaní emailu pre reset hesla
             },
             onError: (error) => {
                 toast.error(error.error.serverError);
             },
-        });
+        },
+    );
 
     const { execute: updateProfile, isExecuting: updatingProfile } = useAction(
         updateProfileAction,
@@ -99,6 +106,8 @@ export const useAuth = () => {
             onSuccess: (data) => {
                 toast.success('Profile updated successfully');
                 router.refresh();
+                // Pre update profilu nemusí byť potrebné presmerovanie, alebo môžeš pridať podľa potreby
+                // router.push('/profile'); // Napríklad presmerovanie späť na profil
             },
             onError: (error) => {
                 toast.error(error.error.serverError);
