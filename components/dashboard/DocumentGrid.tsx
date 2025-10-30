@@ -47,13 +47,12 @@ import {
     RefreshCw,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import UploadCard from '../documents/UploadCard';
 import { useAction } from 'next-safe-action/hooks';
 import { getUserFilesAction, deleteFileAction } from '@/actions/uploadActions';
 import { toast } from 'sonner';
-import { Loading } from '@/components/ui/loading';
-import { LoadingContainer } from '@/components/ui/loading-container';
+import { Spinner } from '@/components/ui/spinner'; // Import your Spinner component
 
 // Status variants pre styling
 const statusVariants = {
@@ -78,6 +77,18 @@ interface Document {
     status?: 'processing' | 'processed' | 'error';
 }
 
+interface FileFromAPI {
+    id: string;
+    name: string;
+    originalName: string;
+    created_at: string;
+    updated_at?: string;
+    last_accessed_at?: string;
+    metadata?: any;
+    size: number;
+    publicUrl: string;
+}
+
 export function DocumentGrid() {
     const router = useRouter();
     const [currentPage, setCurrentPage] = useState(1);
@@ -87,49 +98,56 @@ export function DocumentGrid() {
     const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
     const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
     const [copied, setCopied] = useState(false);
+    const [documents, setDocuments] = useState<Document[]>([]);
 
     // Použitie server actions
     const { 
         execute: fetchFiles, 
-        data: filesData, 
         isPending: isLoading 
     } = useAction(getUserFilesAction, {
-        onSuccess: (data) => {
-            console.log('Files loaded successfully:', data.data?.files);
+        onSuccess: (result) => {
+            if (result.data?.files) {
+                const transformedDocs = transformFilesData(result.data.files);
+                setDocuments(transformedDocs);
+                console.log('Files loaded successfully:', transformedDocs);
+            }
         },
         onError: (error) => {
             toast.error('Failed to load files');
+            console.error('Error loading files:', error);
         },
     });
 
     const { execute: deleteFile, isPending: isDeleting } = useAction(deleteFileAction, {
-        onSuccess: (data) => {
-            toast.success(data.data?.message || 'File deleted successfully');
+        onSuccess: (result) => {
+            toast.success(result.data?.message || 'File deleted successfully');
             // Re-fetch files after deletion
             fetchFiles({});
         },
         onError: (error) => {
-            toast.error(error.error?.message || 'Failed to delete file');
+            toast.error('Failed to delete file');
         },
     });
+
+    // Transformácia dát z API na formát pre komponent
+    const transformFilesData = (files: FileFromAPI[]): Document[] => {
+        return files.map((file, index) => ({
+            id: file.id || `file-${index}`,
+            name: file.name,
+            originalName: file.originalName || file.name,
+            publicUrl: file.publicUrl,
+            size: file.size || 0,
+            created_at: file.created_at || new Date().toISOString(),
+            filePath: file.originalName || file.name,
+            type: getFileType(file.name),
+            status: 'processed' as const
+        }));
+    };
 
     // Načítanie súborov pri mount
     useEffect(() => {
         fetchFiles({});
     }, [fetchFiles]);
-
-    // Transformácia dát z API na formát pre komponent
-    const documents: Document[] = (filesData?.data?.files || []).map((file, index) => ({
-        id: file.id || `file-${index}`,
-        name: file.name,
-        originalName: file.originalName || file.name,
-        publicUrl: file.publicUrl,
-        size: file.size || 0,
-        created_at: file.created_at || new Date().toISOString(),
-        filePath: file.filePath || `${file.name}`,
-        type: getFileType(file.name),
-        status: 'processed' as const // Môžete pridať logiku pre status podľa potreby
-    }));
 
     // Pomocná funkcia na získanie typu súboru z názvu
     function getFileType(filename: string): string {
@@ -396,137 +414,139 @@ export function DocumentGrid() {
                     </div>
                 </div>
 
-                <LoadingContainer 
-                    isLoading={isLoading} 
-                    text="Loading your documents..."
-                    className="min-h-[400px]"
-                >
-                    <div className='mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'>
-                        {/* Upload New Card */}
-                        <UploadCard />
+                <Suspense fallback={<Spinner variant={"default"} size={"lg"} />}>
+                    {isLoading ? (
+                        <Spinner variant={"default"} size={"lg"} />
+                    ) : (
+                        <>
+                            <div className='mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'>
+                                {/* Upload New Card */}
+                                <UploadCard />
 
-                        {/* Document Cards */}
-                        {currentDocuments.map((doc) => (
-                            <Card
-                                key={doc.id}
-                                className='group hover:border-primary/20 flex h-full min-h-[280px] cursor-pointer flex-col border-2 border-transparent transition-all duration-200 hover:shadow-lg'
-                                onClick={() => router.push(`/dashboard/documents/${doc.id}`)}
-                            >
-                                <CardHeader className='flex-1 pb-3'>
-                                    <div className='flex items-start justify-between'>
-                                        <div className='flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/20'>
-                                            <FileText className='h-6 w-6 text-blue-600 dark:text-blue-400' />
-                                        </div>
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button
-                                                    variant='ghost'
-                                                    size='icon'
-                                                    className='h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100'
-                                                    onClick={(e) => e.stopPropagation()}
-                                                >
-                                                    <MoreVertical className='h-4 w-4' />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align='end'>
-                                                <DropdownMenuItem onClick={(e) => handleDownloadClick(doc, e)}>
-                                                    <Download className='mr-2 h-4 w-4' />
-                                                    Download
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem onClick={(e) => handleShareClick(doc, e)}>
-                                                    <Copy className='mr-2 h-4 w-4' />
-                                                    Share
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem
-                                                    className='text-red-600 focus:text-red-600'
-                                                    onClick={(e) => handleDeleteClick(doc, e)}
-                                                >
-                                                    <Trash2 className='mr-2 h-4 w-4' />
-                                                    Delete
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    </div>
-                                    <CardTitle className='mt-4 line-clamp-3 text-lg leading-tight font-semibold'>
-                                        {doc.name}
-                                    </CardTitle>
-                                    <div className='mt-4 flex items-center justify-between'>
-                                        <Badge variant='secondary' className='text-xs'>
-                                            {doc.type}
-                                        </Badge>
-                                        <Badge className={`text-xs ${statusVariants[doc.status || 'processed']}`} variant='outline'>
-                                            {doc.status === 'processing' ? 'Processing...' : doc.status === 'error' ? 'Error' : 'Ready'}
-                                        </Badge>
-                                    </div>
-                                </CardHeader>
-                                <CardContent className='pt-0'>
-                                    <div className='mb-4 space-y-3 text-sm'>
-                                        <div className='flex items-center justify-between'>
-                                            <span className='text-muted-foreground'>Size</span>
-                                            <span className='font-medium'>{formatFileSize(doc.size)}</span>
-                                        </div>
-                                        <div className='flex items-center justify-between'>
-                                            <span className='text-muted-foreground'>Uploaded</span>
-                                            <div className='flex items-center gap-1'>
-                                                <Calendar className='h-3 w-3' />
-                                                <span>{formatDate(doc.created_at)}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <Button
-                                        className='w-full gap-2'
-                                        variant='default'
-                                        size='sm'
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            router.push(`/dashboard/chat/${doc.id}`);
-                                        }}
+                                {/* Document Cards */}
+                                {currentDocuments.map((doc) => (
+                                    <Card
+                                        key={doc.id}
+                                        className='group hover:border-primary/20 flex h-full min-h-[280px] cursor-pointer flex-col border-2 border-transparent transition-all duration-200 hover:shadow-lg'
+                                        onClick={() => router.push(`/dashboard/documents/${doc.id}`)}
                                     >
-                                        <MessageSquare className='h-4 w-4' />
-                                        Chat with AI
-                                    </Button>
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </div>
+                                        <CardHeader className='flex-1 pb-3'>
+                                            <div className='flex items-start justify-between'>
+                                                <div className='flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/20'>
+                                                    <FileText className='h-6 w-6 text-blue-600 dark:text-blue-400' />
+                                                </div>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button
+                                                            variant='ghost'
+                                                            size='icon'
+                                                            className='h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100'
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        >
+                                                            <MoreVertical className='h-4 w-4' />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align='end'>
+                                                        <DropdownMenuItem onClick={(e) => handleDownloadClick(doc, e)}>
+                                                            <Download className='mr-2 h-4 w-4' />
+                                                            Download
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={(e) => handleShareClick(doc, e)}>
+                                                            <Copy className='mr-2 h-4 w-4' />
+                                                            Share
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem
+                                                            className='text-red-600 focus:text-red-600'
+                                                            onClick={(e) => handleDeleteClick(doc, e)}
+                                                        >
+                                                            <Trash2 className='mr-2 h-4 w-4' />
+                                                            Delete
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </div>
+                                            <CardTitle className='mt-4 line-clamp-3 text-lg leading-tight font-semibold'>
+                                                {doc.name}
+                                            </CardTitle>
+                                            <div className='mt-4 flex items-center justify-between'>
+                                                <Badge variant='secondary' className='text-xs'>
+                                                    {doc.type}
+                                                </Badge>
+                                                <Badge className={`text-xs ${statusVariants[doc.status || 'processed']}`} variant='outline'>
+                                                    {doc.status === 'processing' ? 'Processing...' : doc.status === 'error' ? 'Error' : 'Ready'}
+                                                </Badge>
+                                            </div>
+                                        </CardHeader>
+                                        <CardContent className='pt-0'>
+                                            <div className='mb-4 space-y-3 text-sm'>
+                                                <div className='flex items-center justify-between'>
+                                                    <span className='text-muted-foreground'>Size</span>
+                                                    <span className='font-medium'>{formatFileSize(doc.size)}</span>
+                                                </div>
+                                                <div className='flex items-center justify-between'>
+                                                    <span className='text-muted-foreground'>Uploaded</span>
+                                                    <div className='flex items-center gap-1'>
+                                                        <Calendar className='h-3 w-3' />
+                                                        <span>{formatDate(doc.created_at)}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
 
-                    {/* Empty State */}
-                    {documents.length === 0 && !isLoading && (
-                        <div className="text-center py-12">
-                            <FileText className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
-                            <h3 className="text-lg font-semibold mb-2">No documents yet</h3>
-                            <p className="text-muted-foreground mb-6">
-                                Upload your first document to get started
-                            </p>
-                        </div>
+                                            <Button
+                                                className='w-full gap-2'
+                                                variant='default'
+                                                size='sm'
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    router.push(`/dashboard/chat/${doc.id}`);
+                                                }}
+                                            >
+                                                <MessageSquare className='h-4 w-4' />
+                                                Chat with AI
+                                            </Button>
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </div>
+
+                            {/* Empty State */}
+                            {documents.length === 0 && (
+                                <div className="text-center py-12">
+                                    <FileText className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
+                                    <h3 className="text-lg font-semibold mb-2">No documents yet</h3>
+                                    <p className="text-muted-foreground mb-6">
+                                        Upload your first document to get started
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Pagination */}
+                            {totalPages > 1 && (
+                                <div className='flex justify-center'>
+                                    <Pagination>
+                                        <PaginationContent>
+                                            <PaginationItem>
+                                                <PaginationPrevious
+                                                    onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                                                    className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                                                />
+                                            </PaginationItem>
+
+                                            {renderPaginationItems()}
+
+                                            <PaginationItem>
+                                                <PaginationNext
+                                                    onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                                                    className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                                                />
+                                            </PaginationItem>
+                                        </PaginationContent>
+                                    </Pagination>
+                                </div>
+                            )}
+                        </>
                     )}
-
-                    {/* Pagination */}
-                    {totalPages > 1 && (
-                        <div className='flex justify-center'>
-                            <Pagination>
-                                <PaginationContent>
-                                    <PaginationItem>
-                                        <PaginationPrevious
-                                            onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-                                            className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                                        />
-                                    </PaginationItem>
-
-                                    {renderPaginationItems()}
-
-                                    <PaginationItem>
-                                        <PaginationNext
-                                            onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
-                                            className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                                        />
-                                    </PaginationItem>
-                                </PaginationContent>
-                            </Pagination>
-                        </div>
-                    )}
-                </LoadingContainer>
+                </Suspense>
             </div>
 
             {/* Delete Confirmation Dialog */}
@@ -545,7 +565,7 @@ export function DocumentGrid() {
                             className='bg-red-600 text-white hover:bg-red-700'
                             disabled={isDeleting}
                         >
-                            {isDeleting ? <Loading size="sm" className="mr-2" /> : null}
+                            {isDeleting ? <Spinner size="sm" className="mr-2" /> : null}
                             Delete
                         </AlertDialogAction>
                     </AlertDialogFooter>
