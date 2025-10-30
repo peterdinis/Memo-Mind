@@ -100,7 +100,6 @@ export function DocumentGrid() {
     const [copied, setCopied] = useState(false);
     const [documents, setDocuments] = useState<Document[]>([]);
 
-    // Použitie server actions
     const { 
         execute: fetchFiles, 
         isPending: isLoading 
@@ -108,8 +107,7 @@ export function DocumentGrid() {
         onSuccess: (result) => {
             if (result.data?.files) {
                 const transformedDocs = transformFilesData(result.data.files);
-                setDocuments(transformedDocs);
-                console.log('Files loaded successfully:', transformedDocs);
+                setDocuments(transformedDocs)
             }
         },
         onError: (error) => {
