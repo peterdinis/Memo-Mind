@@ -6,8 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
-import { FileText, Send, Download, ArrowLeft, Bot, User } from 'lucide-react';
+import { FileText, Send, Download, ArrowLeft, Bot, User, Upload } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { Empty, EmptyMedia, EmptyHeader, EmptyTitle, EmptyDescription, EmptyContent } from '@/components/ui/empty';
 
 // Mock document data
 const mockDocument = {
@@ -55,6 +56,7 @@ export function DocumentChat() {
     const [messages, setMessages] = useState(initialMessages);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [hasDocument, setHasDocument] = useState(false); // State to track if document is uploaded
     const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
     // Scroll to bottom when messages update
@@ -97,26 +99,21 @@ export function DocumentChat() {
 
     // PDF Download Function
     const handleDownloadPDF = () => {
-        // Create a new jsPDF instance
         const { jsPDF } = require('jspdf');
         const doc = new jsPDF();
 
-        // Add title
         doc.setFontSize(20);
         doc.text(mockDocument.title, 20, 20);
 
-        // Add document metadata
         doc.setFontSize(12);
         doc.text(`Type: ${mockDocument.type}`, 20, 35);
         doc.text(`Size: ${mockDocument.size}`, 20, 42);
         doc.text(`Uploaded: ${mockDocument.uploadedAt}`, 20, 49);
 
-        // Add content
         doc.setFontSize(14);
         const contentLines = doc.splitTextToSize(mockDocument.content, 170);
         doc.text(contentLines, 20, 65);
 
-        // Add chat history if needed
         if (messages.length > 1) {
             doc.addPage();
             doc.setFontSize(16);
@@ -142,11 +139,9 @@ export function DocumentChat() {
             });
         }
 
-        // Save the PDF
         doc.save(`${mockDocument.title.replace(/\s+/g, '_')}.pdf`);
     };
 
-    // Alternative: Download only document content as text file
     const handleDownloadTxt = () => {
         const element = document.createElement('a');
         const file = new Blob([mockDocument.content], { type: 'text/plain' });
@@ -163,6 +158,53 @@ export function DocumentChat() {
         'What is the project timeline?',
         'Summarize the executive summary',
     ];
+
+    if (!hasDocument) {
+  return (
+    <div className='bg-background flex min-h-screen flex-col'>
+      {/* Main Content - Centered with larger text */}
+      <main className='container mx-auto flex flex-1 items-center justify-center px-4 py-6'>
+        <div className='w-full max-w-3xl text-center'>
+          <Empty className="border-0 bg-transparent p-16">
+            <EmptyMedia variant="icon" size="lg">
+              <FileText className="h-12 w-12 text-muted-foreground/70" />
+            </EmptyMedia>
+            
+            <EmptyHeader className="mb-8">
+              <EmptyTitle className="text-3xl font-bold mb-4">
+                No documents to analyze
+              </EmptyTitle>
+              <EmptyDescription className="text-xl leading-8">
+                Your document library is currently empty.
+                <br />
+                Documents you upload will appear here
+                <br />
+                for AI-powered analysis and discussion.
+              </EmptyDescription>
+            </EmptyHeader>
+
+            <EmptyContent className="max-w-md mx-auto">
+              <div className="flex flex-col gap-4 text-lg text-muted-foreground text-left">
+                <div className="flex items-center gap-3">
+                  <div className="size-3 rounded-full bg-primary/60 flex-shrink-0"></div>
+                  <span>Upload PDF, DOCX, or TXT files</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="size-3 rounded-full bg-primary/60 flex-shrink-0"></div>
+                  <span>Chat with AI about document content</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="size-3 rounded-full bg-primary/60 flex-shrink-0"></div>
+                  <span>Get insights and summaries</span>
+                </div>
+              </div>
+            </EmptyContent>
+          </Empty>
+        </div>
+      </main>
+    </div>
+  );
+}
 
     return (
         <div className='bg-background flex min-h-screen flex-col'>
@@ -265,18 +307,16 @@ export function DocumentChat() {
                                 {messages.map((message) => (
                                     <div
                                         key={message.id}
-                                        className={`flex gap-3 ${
-                                            message.role === 'user'
+                                        className={`flex gap-3 ${message.role === 'user'
                                                 ? 'flex-row-reverse'
                                                 : 'flex-row'
-                                        }`}
+                                            }`}
                                     >
                                         <div
-                                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-                                                message.role === 'user'
+                                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${message.role === 'user'
                                                     ? 'bg-primary text-primary-foreground'
                                                     : 'bg-green-100 text-green-600 dark:bg-green-900/20'
-                                            }`}
+                                                }`}
                                         >
                                             {message.role === 'user' ? (
                                                 <User className='h-4 w-4' />
@@ -285,18 +325,16 @@ export function DocumentChat() {
                                             )}
                                         </div>
                                         <div
-                                            className={`flex-1 space-y-2 ${
-                                                message.role === 'user'
+                                            className={`flex-1 space-y-2 ${message.role === 'user'
                                                     ? 'text-right'
                                                     : 'text-left'
-                                            }`}
+                                                }`}
                                         >
                                             <div
-                                                className={`inline-block rounded-lg px-4 py-2 ${
-                                                    message.role === 'user'
+                                                className={`inline-block rounded-lg px-4 py-2 ${message.role === 'user'
                                                         ? 'bg-primary text-primary-foreground'
                                                         : 'bg-muted'
-                                                }`}
+                                                    }`}
                                             >
                                                 <p className='text-sm'>
                                                     {message.content}
