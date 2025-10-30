@@ -97,8 +97,7 @@ export const useAuth = () => {
             onError: (error) => {
                 toast.error(error.error.serverError);
             },
-        },
-    );
+        });
 
     const { execute: updateProfile, isExecuting: updatingProfile } = useAction(
         updateProfileAction,

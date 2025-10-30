@@ -131,7 +131,10 @@ export function DashboardNavbar() {
                             >
                                 <Avatar className='h-8 w-8'>
                                     <AvatarImage
-                                        src={profile?.avatar_url || '/avatars/user.jpg'}
+                                        src={
+                                            profile?.avatar_url ||
+                                            '/avatars/user.jpg'
+                                        }
                                         alt='Profile'
                                     />
                                     <AvatarFallback className='bg-primary text-primary-foreground'>
@@ -159,7 +162,7 @@ export function DashboardNavbar() {
                                 </div>
                             </DropdownMenuLabel>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem 
+                            <DropdownMenuItem
                                 onClick={handleLogout}
                                 className='text-destructive focus:text-destructive cursor-pointer'
                             >
