@@ -27,7 +27,7 @@ const Navigation: React.FC = () => {
                 {/* Desktop Controls */}
                 <div className='hidden items-center gap-3 md:flex'>
                     <Button
-                        onClick={() => router.push('/auth')}
+                        onClick={() => router.push('/sign-in')}
                         variant={'default'}
                         className='border-primary/20'
                     >
@@ -85,7 +85,7 @@ const Navigation: React.FC = () => {
                     <div className='flex flex-col space-y-3'>
                         <Button
                             onClick={() => {
-                                router.push('/auth');
+                                router.push('/sign-in');
                                 setIsMenuOpen(false);
                             }}
                             variant='outline'
@@ -93,8 +93,6 @@ const Navigation: React.FC = () => {
                         >
                             Sign In
                         </Button>
-
-                        {/* Môžete pridať ďalšie navigačné položky tu */}
                         <Button
                             variant='ghost'
                             className='w-full justify-start'
