@@ -11,7 +11,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { BookOpen, Home, MessageSquare, Activity } from 'lucide-react';
+import { BookOpen, Home, MessageSquare} from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 
 const menuItems = [
@@ -19,11 +19,6 @@ const menuItems = [
         title: 'Dashboard',
         url: '/dashboard',
         icon: Home,
-    },
-    {
-        title: 'Activity',
-        url: '/dashboard/activity',
-        icon: Activity,
     },
     {
         title: 'Chat',
