@@ -25,6 +25,7 @@ type FormData = z.infer<typeof signUpSchema>;
 export const SignUpForm = () => {
     const { signUp, signingUp } = useAuth();
     const [showPassword, setShowPassword] = useState(false);
+    const [isSubmitted, setIsSubmitted] = useState(false);
 
     const form = useForm<FormData>({
         resolver: zodResolver(signUpSchema),
@@ -35,13 +36,49 @@ export const SignUpForm = () => {
         },
     });
 
-    const onSubmit = (data: FormData) => {
-        signUp(data);
+    const onSubmit = async (data: FormData) => {
+        setIsSubmitted(true);
+        await signUp(data);
+        // Po úspešnom odoslaní sa redirect spracuje v auth hooku
     };
 
     const togglePasswordVisibility = () => {
         setShowPassword(!showPassword);
     };
+
+    // Ak práve prebieha odosielanie, zobraz loading screen
+    if (isSubmitted && signingUp) {
+        return (
+            <AuthWrapper>
+                <Card className='mx-auto max-w-sm'>
+                    <CardContent className='pt-6'>
+                        <div className='flex flex-col items-center justify-center space-y-4 py-8'>
+                            {/* Loading spinner */}
+                            <div className='relative'>
+                                <div className='h-12 w-12 rounded-full border-4 border-primary/20'></div>
+                                <div className='absolute left-0 top-0 h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent'></div>
+                            </div>
+                            
+                            {/* Loading text */}
+                            <div className='text-center space-y-2'>
+                                <h3 className='text-lg font-semibold'>Creating your account</h3>
+                                <p className='text-sm text-muted-foreground'>
+                                    Please wait while we set up your account...
+                                </p>
+                            </div>
+                            
+                            {/* Pulsing dots for visual interest */}
+                            <div className='flex space-x-1'>
+                                <div className='h-2 w-2 animate-pulse rounded-full bg-primary'></div>
+                                <div className='h-2 w-2 animate-pulse rounded-full bg-primary' style={{ animationDelay: '0.2s' }}></div>
+                                <div className='h-2 w-2 animate-pulse rounded-full bg-primary' style={{ animationDelay: '0.4s' }}></div>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </AuthWrapper>
+        );
+    }
 
     return (
         <AuthWrapper>
@@ -70,6 +107,7 @@ export const SignUpForm = () => {
                                         ? 'border-destructive'
                                         : ''
                                 }
+                                disabled={signingUp}
                             />
                             {form.formState.errors.fullName && (
                                 <FieldError>
@@ -91,6 +129,7 @@ export const SignUpForm = () => {
                                         ? 'border-destructive'
                                         : ''
                                 }
+                                disabled={signingUp}
                             />
                             {form.formState.errors.email && (
                                 <FieldError>
@@ -113,6 +152,7 @@ export const SignUpForm = () => {
                                             ? 'border-destructive pr-10'
                                             : 'pr-10'
                                     }
+                                    disabled={signingUp}
                                 />
                                 <Button
                                     type='button'
@@ -120,6 +160,7 @@ export const SignUpForm = () => {
                                     size='sm'
                                     className='absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent'
                                     onClick={togglePasswordVisibility}
+                                    disabled={signingUp}
                                 >
                                     {showPassword ? (
                                         <EyeOff className='h-4 w-4 text-muted-foreground' />
@@ -142,17 +183,30 @@ export const SignUpForm = () => {
 
                         <Button
                             type='submit'
-                            className='w-full'
+                            className='w-full relative'
                             disabled={signingUp}
                         >
-                            {signingUp
-                                ? 'Creating account...'
-                                : 'Create Account'}
+                            {signingUp ? (
+                                <>
+                                    <div className='absolute left-4 flex space-x-1'>
+                                        <div className='h-1.5 w-1.5 animate-pulse rounded-full bg-white'></div>
+                                        <div className='h-1.5 w-1.5 animate-pulse rounded-full bg-white' style={{ animationDelay: '0.2s' }}></div>
+                                        <div className='h-1.5 w-1.5 animate-pulse rounded-full bg-white' style={{ animationDelay: '0.4s' }}></div>
+                                    </div>
+                                    Creating account...
+                                </>
+                            ) : (
+                                'Create Account'
+                            )}
                         </Button>
                     </form>
                     <div className='mt-4 text-center text-sm'>
                         Already have an account?{' '}
-                        <Link href='/sign-in' className='underline'>
+                        <Link 
+                            href='/sign-in' 
+                            className='underline'
+                            onClick={(e) => signingUp ? e.preventDefault() : null}
+                        >
                             Sign in
                         </Link>
                     </div>
