@@ -74,7 +74,9 @@ export const ForgotPasswordForm = () => {
                             className='w-full'
                             disabled={resettingPassword}
                         >
-                            {resettingPassword ? 'Sending...' : 'Send Reset Instructions'}
+                            {resettingPassword
+                                ? 'Sending...'
+                                : 'Send Reset Instructions'}
                         </Button>
                     </form>
                     <div className='mt-4 text-center text-sm'>

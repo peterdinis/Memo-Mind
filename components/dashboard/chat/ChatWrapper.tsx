@@ -6,9 +6,24 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
-import { FileText, Send, Download, ArrowLeft, Bot, User, Upload } from 'lucide-react';
+import {
+    FileText,
+    Send,
+    Download,
+    ArrowLeft,
+    Bot,
+    User,
+    Upload,
+} from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { Empty, EmptyMedia, EmptyHeader, EmptyTitle, EmptyDescription, EmptyContent } from '@/components/ui/empty';
+import {
+    Empty,
+    EmptyMedia,
+    EmptyHeader,
+    EmptyTitle,
+    EmptyDescription,
+    EmptyContent,
+} from '@/components/ui/empty';
 
 // Mock document data
 const mockDocument = {
@@ -160,51 +175,55 @@ export function DocumentChat() {
     ];
 
     if (!hasDocument) {
-  return (
-    <div className='bg-background flex min-h-screen flex-col'>
-      {/* Main Content - Centered with larger text */}
-      <main className='container mx-auto flex flex-1 items-center justify-center px-4 py-6'>
-        <div className='w-full max-w-3xl text-center'>
-          <Empty className="border-0 bg-transparent p-16">
-            <EmptyMedia variant="icon" size="lg">
-              <FileText className="h-12 w-12 text-muted-foreground/70" />
-            </EmptyMedia>
-            
-            <EmptyHeader className="mb-8">
-              <EmptyTitle className="text-3xl font-bold mb-4">
-                No documents to analyze
-              </EmptyTitle>
-              <EmptyDescription className="text-xl leading-8">
-                Your document library is currently empty.
-                <br />
-                Documents you upload will appear here
-                <br />
-                for AI-powered analysis and discussion.
-              </EmptyDescription>
-            </EmptyHeader>
+        return (
+            <div className='bg-background flex min-h-screen flex-col'>
+                {/* Main Content - Centered with larger text */}
+                <main className='container mx-auto flex flex-1 items-center justify-center px-4 py-6'>
+                    <div className='w-full max-w-3xl text-center'>
+                        <Empty className='border-0 bg-transparent p-16'>
+                            <EmptyMedia variant='icon' size='lg'>
+                                <FileText className='text-muted-foreground/70 h-12 w-12' />
+                            </EmptyMedia>
 
-            <EmptyContent className="max-w-md mx-auto">
-              <div className="flex flex-col gap-4 text-lg text-muted-foreground text-left">
-                <div className="flex items-center gap-3">
-                  <div className="size-3 rounded-full bg-primary/60 flex-shrink-0"></div>
-                  <span>Upload PDF, DOCX, or TXT files</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="size-3 rounded-full bg-primary/60 flex-shrink-0"></div>
-                  <span>Chat with AI about document content</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="size-3 rounded-full bg-primary/60 flex-shrink-0"></div>
-                  <span>Get insights and summaries</span>
-                </div>
-              </div>
-            </EmptyContent>
-          </Empty>
-        </div>
-      </main>
-    </div>
-  );
-}
+                            <EmptyHeader className='mb-8'>
+                                <EmptyTitle className='mb-4 text-3xl font-bold'>
+                                    No documents to analyze
+                                </EmptyTitle>
+                                <EmptyDescription className='text-xl leading-8'>
+                                    Your document library is currently empty.
+                                    <br />
+                                    Documents you upload will appear here
+                                    <br />
+                                    for AI-powered analysis and discussion.
+                                </EmptyDescription>
+                            </EmptyHeader>
+
+                            <EmptyContent className='mx-auto max-w-md'>
+                                <div className='text-muted-foreground flex flex-col gap-4 text-left text-lg'>
+                                    <div className='flex items-center gap-3'>
+                                        <div className='bg-primary/60 size-3 flex-shrink-0 rounded-full'></div>
+                                        <span>
+                                            Upload PDF, DOCX, or TXT files
+                                        </span>
+                                    </div>
+                                    <div className='flex items-center gap-3'>
+                                        <div className='bg-primary/60 size-3 flex-shrink-0 rounded-full'></div>
+                                        <span>
+                                            Chat with AI about document content
+                                        </span>
+                                    </div>
+                                    <div className='flex items-center gap-3'>
+                                        <div className='bg-primary/60 size-3 flex-shrink-0 rounded-full'></div>
+                                        <span>Get insights and summaries</span>
+                                    </div>
+                                </div>
+                            </EmptyContent>
+                        </Empty>
+                    </div>
+                </main>
+            </div>
+        );
+    }
 
     return (
         <div className='bg-background flex min-h-screen flex-col'>
@@ -307,16 +326,18 @@ export function DocumentChat() {
                                 {messages.map((message) => (
                                     <div
                                         key={message.id}
-                                        className={`flex gap-3 ${message.role === 'user'
+                                        className={`flex gap-3 ${
+                                            message.role === 'user'
                                                 ? 'flex-row-reverse'
                                                 : 'flex-row'
-                                            }`}
+                                        }`}
                                     >
                                         <div
-                                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${message.role === 'user'
+                                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+                                                message.role === 'user'
                                                     ? 'bg-primary text-primary-foreground'
                                                     : 'bg-green-100 text-green-600 dark:bg-green-900/20'
-                                                }`}
+                                            }`}
                                         >
                                             {message.role === 'user' ? (
                                                 <User className='h-4 w-4' />
@@ -325,16 +346,18 @@ export function DocumentChat() {
                                             )}
                                         </div>
                                         <div
-                                            className={`flex-1 space-y-2 ${message.role === 'user'
+                                            className={`flex-1 space-y-2 ${
+                                                message.role === 'user'
                                                     ? 'text-right'
                                                     : 'text-left'
-                                                }`}
+                                            }`}
                                         >
                                             <div
-                                                className={`inline-block rounded-lg px-4 py-2 ${message.role === 'user'
+                                                className={`inline-block rounded-lg px-4 py-2 ${
+                                                    message.role === 'user'
                                                         ? 'bg-primary text-primary-foreground'
                                                         : 'bg-muted'
-                                                    }`}
+                                                }`}
                                             >
                                                 <p className='text-sm'>
                                                     {message.content}

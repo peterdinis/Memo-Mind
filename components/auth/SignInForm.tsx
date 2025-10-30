@@ -54,23 +54,32 @@ export const SignInForm = () => {
                         <div className='flex flex-col items-center justify-center space-y-4 py-8'>
                             {/* Loading spinner */}
                             <div className='relative'>
-                                <div className='h-12 w-12 rounded-full border-4 border-primary/20'></div>
-                                <div className='absolute left-0 top-0 h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent'></div>
+                                <div className='border-primary/20 h-12 w-12 rounded-full border-4'></div>
+                                <div className='border-primary absolute top-0 left-0 h-12 w-12 animate-spin rounded-full border-4 border-t-transparent'></div>
                             </div>
-                            
+
                             {/* Loading text */}
-                            <div className='text-center space-y-2'>
-                                <h3 className='text-lg font-semibold'>Signing you in</h3>
-                                <p className='text-sm text-muted-foreground'>
-                                    Please wait while we authenticate your account...
+                            <div className='space-y-2 text-center'>
+                                <h3 className='text-lg font-semibold'>
+                                    Signing you in
+                                </h3>
+                                <p className='text-muted-foreground text-sm'>
+                                    Please wait while we authenticate your
+                                    account...
                                 </p>
                             </div>
-                            
+
                             {/* Pulsing dots for visual interest */}
                             <div className='flex space-x-1'>
-                                <div className='h-2 w-2 animate-pulse rounded-full bg-primary'></div>
-                                <div className='h-2 w-2 animate-pulse rounded-full bg-primary' style={{ animationDelay: '0.2s' }}></div>
-                                <div className='h-2 w-2 animate-pulse rounded-full bg-primary' style={{ animationDelay: '0.4s' }}></div>
+                                <div className='bg-primary h-2 w-2 animate-pulse rounded-full'></div>
+                                <div
+                                    className='bg-primary h-2 w-2 animate-pulse rounded-full'
+                                    style={{ animationDelay: '0.2s' }}
+                                ></div>
+                                <div
+                                    className='bg-primary h-2 w-2 animate-pulse rounded-full'
+                                    style={{ animationDelay: '0.4s' }}
+                                ></div>
                             </div>
                         </div>
                     </CardContent>
@@ -135,14 +144,14 @@ export const SignInForm = () => {
                                     type='button'
                                     variant='ghost'
                                     size='sm'
-                                    className='absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent'
+                                    className='absolute top-0 right-0 h-full px-3 py-2 hover:bg-transparent'
                                     onClick={togglePasswordVisibility}
                                     disabled={signingIn}
                                 >
                                     {showPassword ? (
-                                        <EyeOff className='h-4 w-4 text-muted-foreground' />
+                                        <EyeOff className='text-muted-foreground h-4 w-4' />
                                     ) : (
-                                        <Eye className='h-4 w-4 text-muted-foreground' />
+                                        <Eye className='text-muted-foreground h-4 w-4' />
                                     )}
                                     <span className='sr-only'>
                                         {showPassword
@@ -160,15 +169,21 @@ export const SignInForm = () => {
 
                         <Button
                             type='submit'
-                            className='w-full relative'
+                            className='relative w-full'
                             disabled={signingIn}
                         >
                             {signingIn ? (
                                 <>
                                     <div className='absolute left-4 flex space-x-1'>
                                         <div className='h-1.5 w-1.5 animate-pulse rounded-full bg-white'></div>
-                                        <div className='h-1.5 w-1.5 animate-pulse rounded-full bg-white' style={{ animationDelay: '0.2s' }}></div>
-                                        <div className='h-1.5 w-1.5 animate-pulse rounded-full bg-white' style={{ animationDelay: '0.4s' }}></div>
+                                        <div
+                                            className='h-1.5 w-1.5 animate-pulse rounded-full bg-white'
+                                            style={{ animationDelay: '0.2s' }}
+                                        ></div>
+                                        <div
+                                            className='h-1.5 w-1.5 animate-pulse rounded-full bg-white'
+                                            style={{ animationDelay: '0.4s' }}
+                                        ></div>
                                     </div>
                                     Signing in...
                                 </>
@@ -179,10 +194,12 @@ export const SignInForm = () => {
                     </form>
                     <div className='mt-4 text-center text-sm'>
                         Don&apos;t have an account?{' '}
-                        <Link 
-                            href='/sign-up' 
+                        <Link
+                            href='/sign-up'
                             className='underline'
-                            onClick={(e) => signingIn ? e.preventDefault() : null}
+                            onClick={(e) =>
+                                signingIn ? e.preventDefault() : null
+                            }
                         >
                             Sign up
                         </Link>
@@ -191,7 +208,9 @@ export const SignInForm = () => {
                         <Link
                             href='/forgot-password'
                             className='text-blue-600 underline'
-                            onClick={(e) => signingIn ? e.preventDefault() : null}
+                            onClick={(e) =>
+                                signingIn ? e.preventDefault() : null
+                            }
                         >
                             Forgot your password?
                         </Link>

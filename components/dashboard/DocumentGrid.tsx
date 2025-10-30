@@ -44,56 +44,50 @@ import {
     Trash2,
     Copy,
     CheckCircle2,
+    RefreshCw,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import UploadCard from '../documents/UploadCard';
+import { useAction } from 'next-safe-action/hooks';
+import { getUserFilesAction, deleteFileAction } from '@/actions/uploadActions';
+import { toast } from 'sonner';
+import { Spinner } from '@/components/ui/spinner'; // Import your Spinner component
 
-// Mock data
-const mockDocuments = [
-    {
-        id: '1',
-        title: 'Project Requirements Document',
-        type: 'PDF',
-        uploadedAt: '2024-01-15',
-        size: '2.4 MB',
-        status: 'processed' as const,
-    },
-    {
-        id: '2',
-        title: 'Research Paper Analysis',
-        type: 'DOCX',
-        uploadedAt: '2024-01-14',
-        size: '1.8 MB',
-        status: 'processing' as const,
-    },
-    {
-        id: '3',
-        title: 'Meeting Notes Q1',
-        type: 'TXT',
-        uploadedAt: '2024-01-13',
-        size: '0.8 MB',
-        status: 'processed' as const,
-    },
-];
-
+// Status variants pre styling
 const statusVariants = {
-    processing:
-        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400',
-    processed:
-        'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400',
+    processing: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400',
+    processed: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400',
     error: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400',
 };
 
-const ITEMS_PER_PAGE = 3;
+const ITEMS_PER_PAGE = 8;
 
-type SortOption =
-    | 'newest'
-    | 'oldest'
-    | 'name-asc'
-    | 'name-desc'
-    | 'size-asc'
-    | 'size-desc';
+type SortOption = 'newest' | 'oldest' | 'name-asc' | 'name-desc' | 'size-asc' | 'size-desc';
+
+interface Document {
+    id: string;
+    name: string;
+    originalName: string;
+    publicUrl: string;
+    size: number;
+    created_at: string;
+    filePath?: string;
+    type?: string;
+    status?: 'processing' | 'processed' | 'error';
+}
+
+interface FileFromAPI {
+    id: string;
+    name: string;
+    originalName: string;
+    created_at: string;
+    updated_at?: string;
+    last_accessed_at?: string;
+    metadata?: any;
+    size: number;
+    publicUrl: string;
+}
 
 export function DocumentGrid() {
     const router = useRouter();
@@ -102,32 +96,108 @@ export function DocumentGrid() {
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [shareDialogOpen, setShareDialogOpen] = useState(false);
     const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
-    const [selectedDoc, setSelectedDoc] = useState<
-        (typeof mockDocuments)[0] | null
-    >(null);
+    const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
     const [copied, setCopied] = useState(false);
+    const [documents, setDocuments] = useState<Document[]>([]);
+
+    const { 
+        execute: fetchFiles, 
+        isPending: isLoading 
+    } = useAction(getUserFilesAction, {
+        onSuccess: (result) => {
+            if (result.data?.files) {
+                const transformedDocs = transformFilesData(result.data.files);
+                setDocuments(transformedDocs)
+            }
+        },
+        onError: (error) => {
+            toast.error('Failed to load files');
+            console.error('Error loading files:', error);
+        },
+    });
+
+    const { execute: deleteFile, isPending: isDeleting } = useAction(deleteFileAction, {
+        onSuccess: (result) => {
+            toast.success(result.data?.message || 'File deleted successfully');
+            // Re-fetch files after deletion
+            fetchFiles({});
+        },
+        onError: (error) => {
+            toast.error('Failed to delete file');
+        },
+    });
+
+    // Transformácia dát z API na formát pre komponent
+    const transformFilesData = (files: FileFromAPI[]): Document[] => {
+        return files.map((file, index) => ({
+            id: file.id || `file-${index}`,
+            name: file.name,
+            originalName: file.originalName || file.name,
+            publicUrl: file.publicUrl,
+            size: file.size || 0,
+            created_at: file.created_at || new Date().toISOString(),
+            filePath: file.originalName || file.name,
+            type: getFileType(file.name),
+            status: 'processed' as const
+        }));
+    };
+
+    // Načítanie súborov pri mount
+    useEffect(() => {
+        fetchFiles({});
+    }, [fetchFiles]);
+
+    // Pomocná funkcia na získanie typu súboru z názvu
+    function getFileType(filename: string): string {
+        const extension = filename.split('.').pop()?.toLowerCase();
+        switch (extension) {
+            case 'pdf':
+                return 'PDF';
+            case 'docx':
+                return 'DOCX';
+            case 'txt':
+                return 'TXT';
+            case 'doc':
+                return 'DOC';
+            default:
+                return extension?.toUpperCase() || 'FILE';
+        }
+    }
+
+    // Formatovanie veľkosti súboru
+    function formatFileSize(bytes: number): string {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    // Formatovanie dátumu
+    function formatDate(dateString: string): string {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        });
+    }
 
     // Sort documents based on selected option
-    const sortedDocuments = [...mockDocuments].sort((a, b) => {
+    const sortedDocuments = [...documents].sort((a, b) => {
         switch (sortBy) {
             case 'newest':
-                return (
-                    new Date(b.uploadedAt).getTime() -
-                    new Date(a.uploadedAt).getTime()
-                );
+                return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
             case 'oldest':
-                return (
-                    new Date(a.uploadedAt).getTime() -
-                    new Date(b.uploadedAt).getTime()
-                );
+                return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
             case 'name-asc':
-                return a.title.localeCompare(b.title);
+                return a.name.localeCompare(b.name);
             case 'name-desc':
-                return b.title.localeCompare(a.title);
+                return b.name.localeCompare(a.name);
             case 'size-asc':
-                return parseFloat(a.size) - parseFloat(b.size);
+                return a.size - b.size;
             case 'size-desc':
-                return parseFloat(b.size) - parseFloat(a.size);
+                return b.size - a.size;
             default:
                 return 0;
         }
@@ -151,37 +221,27 @@ export function DocumentGrid() {
         setCurrentPage(1);
     };
 
-    const handleDeleteClick = (
-        doc: (typeof mockDocuments)[0],
-        e: React.MouseEvent,
-    ) => {
+    const handleDeleteClick = (doc: Document, e: React.MouseEvent) => {
         e.stopPropagation();
         setSelectedDoc(doc);
         setDeleteDialogOpen(true);
     };
 
-    const handleShareClick = (
-        doc: (typeof mockDocuments)[0],
-        e: React.MouseEvent,
-    ) => {
+    const handleShareClick = (doc: Document, e: React.MouseEvent) => {
         e.stopPropagation();
         setSelectedDoc(doc);
         setShareDialogOpen(true);
     };
 
-    const handleDownloadClick = (
-        doc: (typeof mockDocuments)[0],
-        e: React.MouseEvent,
-    ) => {
+    const handleDownloadClick = (doc: Document, e: React.MouseEvent) => {
         e.stopPropagation();
         setSelectedDoc(doc);
         setDownloadDialogOpen(true);
     };
 
     const handleDeleteConfirm = () => {
-        if (selectedDoc) {
-            console.log('Deleting document:', selectedDoc.title);
-            // Here you would typically call an API to delete the document
+        if (selectedDoc && selectedDoc.filePath) {
+            deleteFile({ filePath: selectedDoc.filePath });
         }
         setDeleteDialogOpen(false);
         setSelectedDoc(null);
@@ -189,7 +249,7 @@ export function DocumentGrid() {
 
     const handleShareConfirm = () => {
         if (selectedDoc) {
-            const shareUrl = `${window.location.origin}/share/${selectedDoc.id}`;
+            const shareUrl = selectedDoc.publicUrl;
             navigator.clipboard.writeText(shareUrl).then(() => {
                 setCopied(true);
                 setTimeout(() => setCopied(false), 2000);
@@ -200,15 +260,16 @@ export function DocumentGrid() {
 
     const handleDownloadConfirm = () => {
         if (selectedDoc) {
-            console.log('Downloading document:', selectedDoc.title);
-            // Here you would typically trigger the download
-            // For demo purposes, we'll create a mock download
+            // Priamy download cez public URL
             const link = document.createElement('a');
-            link.href = '#';
-            link.download = `${selectedDoc.title}.${selectedDoc.type.toLowerCase()}`;
+            link.href = selectedDoc.publicUrl;
+            link.download = selectedDoc.name;
+            link.target = '_blank';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            
+            toast.success(`Downloading ${selectedDoc.name}`);
         }
         setDownloadDialogOpen(false);
         setSelectedDoc(null);
@@ -216,12 +277,18 @@ export function DocumentGrid() {
 
     const copyShareLink = () => {
         if (selectedDoc) {
-            const shareUrl = `${window.location.origin}/share/${selectedDoc.id}`;
+            const shareUrl = selectedDoc.publicUrl;
             navigator.clipboard.writeText(shareUrl).then(() => {
                 setCopied(true);
                 setTimeout(() => setCopied(false), 2000);
+                toast.success('Link copied to clipboard');
             });
         }
+    };
+
+    const handleRefresh = () => {
+        fetchFiles({});
+        toast.info('Refreshing files...');
     };
 
     const renderPaginationItems = () => {
@@ -313,31 +380,30 @@ export function DocumentGrid() {
             {/* Documents Grid */}
             <div>
                 <div className='mb-6 flex items-center justify-between'>
-                    <h2 className='text-2xl font-bold'>Your Documents</h2>
+                    <div className='flex items-center gap-4'>
+                        <h2 className='text-2xl font-bold'>Your Documents</h2>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleRefresh}
+                            disabled={isLoading}
+                        >
+                            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                            Refresh
+                        </Button>
+                    </div>
                     <div className='flex gap-2'>
                         <Select value={sortBy} onValueChange={handleSortChange}>
                             <SelectTrigger className='w-[180px]'>
                                 <SelectValue placeholder='Sort by...' />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value='newest'>
-                                    Newest first
-                                </SelectItem>
-                                <SelectItem value='oldest'>
-                                    Oldest first
-                                </SelectItem>
-                                <SelectItem value='name-asc'>
-                                    Name A-Z
-                                </SelectItem>
-                                <SelectItem value='name-desc'>
-                                    Name Z-A
-                                </SelectItem>
-                                <SelectItem value='size-asc'>
-                                    Size: Small to Large
-                                </SelectItem>
-                                <SelectItem value='size-desc'>
-                                    Size: Large to Small
-                                </SelectItem>
+                                <SelectItem value='newest'>Newest first</SelectItem>
+                                <SelectItem value='oldest'>Oldest first</SelectItem>
+                                <SelectItem value='name-asc'>Name A-Z</SelectItem>
+                                <SelectItem value='name-desc'>Name Z-A</SelectItem>
+                                <SelectItem value='size-asc'>Size: Small to Large</SelectItem>
+                                <SelectItem value='size-desc'>Size: Large to Small</SelectItem>
                             </SelectContent>
                         </Select>
                         <Button variant='outline' size='sm'>
@@ -346,189 +412,158 @@ export function DocumentGrid() {
                     </div>
                 </div>
 
-                <div className='mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'>
-                    {/* Upload New Card */}
-                    <UploadCard />
+                <Suspense fallback={<Spinner variant={"default"} size={"lg"} />}>
+                    {isLoading ? (
+                        <Spinner variant={"default"} size={"lg"} />
+                    ) : (
+                        <>
+                            <div className='mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'>
+                                {/* Upload New Card */}
+                                <UploadCard />
 
-                    {/* Document Cards */}
-                    {currentDocuments.map((doc) => (
-                        <Card
-                            key={doc.id}
-                            className='group hover:border-primary/20 flex h-full min-h-[280px] cursor-pointer flex-col border-2 border-transparent transition-all duration-200 hover:shadow-lg'
-                            onClick={() =>
-                                router.push(`/dashboard/documents/${doc.id}`)
-                            }
-                        >
-                            <CardHeader className='flex-1 pb-3'>
-                                <div className='flex items-start justify-between'>
-                                    <div className='flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/20'>
-                                        <FileText className='h-6 w-6 text-blue-600 dark:text-blue-400' />
-                                    </div>
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
+                                {/* Document Cards */}
+                                {currentDocuments.map((doc) => (
+                                    <Card
+                                        key={doc.id}
+                                        className='group hover:border-primary/20 flex h-full min-h-[280px] cursor-pointer flex-col border-2 border-transparent transition-all duration-200 hover:shadow-lg'
+                                        onClick={() => router.push(`/dashboard/documents/${doc.id}`)}
+                                    >
+                                        <CardHeader className='flex-1 pb-3'>
+                                            <div className='flex items-start justify-between'>
+                                                <div className='flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/20'>
+                                                    <FileText className='h-6 w-6 text-blue-600 dark:text-blue-400' />
+                                                </div>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button
+                                                            variant='ghost'
+                                                            size='icon'
+                                                            className='h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100'
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        >
+                                                            <MoreVertical className='h-4 w-4' />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align='end'>
+                                                        <DropdownMenuItem onClick={(e) => handleDownloadClick(doc, e)}>
+                                                            <Download className='mr-2 h-4 w-4' />
+                                                            Download
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={(e) => handleShareClick(doc, e)}>
+                                                            <Copy className='mr-2 h-4 w-4' />
+                                                            Share
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem
+                                                            className='text-red-600 focus:text-red-600'
+                                                            onClick={(e) => handleDeleteClick(doc, e)}
+                                                        >
+                                                            <Trash2 className='mr-2 h-4 w-4' />
+                                                            Delete
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </div>
+                                            <CardTitle className='mt-4 line-clamp-3 text-lg leading-tight font-semibold'>
+                                                {doc.name}
+                                            </CardTitle>
+                                            <div className='mt-4 flex items-center justify-between'>
+                                                <Badge variant='secondary' className='text-xs'>
+                                                    {doc.type}
+                                                </Badge>
+                                                <Badge className={`text-xs ${statusVariants[doc.status || 'processed']}`} variant='outline'>
+                                                    {doc.status === 'processing' ? 'Processing...' : doc.status === 'error' ? 'Error' : 'Ready'}
+                                                </Badge>
+                                            </div>
+                                        </CardHeader>
+                                        <CardContent className='pt-0'>
+                                            <div className='mb-4 space-y-3 text-sm'>
+                                                <div className='flex items-center justify-between'>
+                                                    <span className='text-muted-foreground'>Size</span>
+                                                    <span className='font-medium'>{formatFileSize(doc.size)}</span>
+                                                </div>
+                                                <div className='flex items-center justify-between'>
+                                                    <span className='text-muted-foreground'>Uploaded</span>
+                                                    <div className='flex items-center gap-1'>
+                                                        <Calendar className='h-3 w-3' />
+                                                        <span>{formatDate(doc.created_at)}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
                                             <Button
-                                                variant='ghost'
-                                                size='icon'
-                                                className='h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100'
-                                                onClick={(e) =>
-                                                    e.stopPropagation()
-                                                }
+                                                className='w-full gap-2'
+                                                variant='default'
+                                                size='sm'
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    router.push(`/dashboard/chat/${doc.id}`);
+                                                }}
                                             >
-                                                <MoreVertical className='h-4 w-4' />
+                                                <MessageSquare className='h-4 w-4' />
+                                                Chat with AI
                                             </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align='end'>
-                                            <DropdownMenuItem
-                                                onClick={(e) =>
-                                                    handleDownloadClick(doc, e)
-                                                }
-                                            >
-                                                <Download className='mr-2 h-4 w-4' />
-                                                Download
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem
-                                                className='text-red-600 focus:text-red-600'
-                                                onClick={(e) =>
-                                                    handleDeleteClick(doc, e)
-                                                }
-                                            >
-                                                <Trash2 className='mr-2 h-4 w-4' />
-                                                Delete
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </div>
+
+                            {/* Empty State */}
+                            {documents.length === 0 && (
+                                <div className="text-center py-12">
+                                    <FileText className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
+                                    <h3 className="text-lg font-semibold mb-2">No documents yet</h3>
+                                    <p className="text-muted-foreground mb-6">
+                                        Upload your first document to get started
+                                    </p>
                                 </div>
-                                <CardTitle className='mt-4 line-clamp-3 text-lg leading-tight font-semibold'>
-                                    {doc.title}
-                                </CardTitle>
-                                <div className='mt-4 flex items-center justify-between'>
-                                    <Badge
-                                        variant='secondary'
-                                        className='text-xs'
-                                    >
-                                        {doc.type}
-                                    </Badge>
-                                    <Badge
-                                        className={`text-xs ${statusVariants[doc.status]}`}
-                                        variant='outline'
-                                    >
-                                        {doc.status === 'processing'
-                                            ? 'Processing...'
-                                            : doc.status === 'error'
-                                              ? 'Error'
-                                              : 'Ready'}
-                                    </Badge>
+                            )}
+
+                            {/* Pagination */}
+                            {totalPages > 1 && (
+                                <div className='flex justify-center'>
+                                    <Pagination>
+                                        <PaginationContent>
+                                            <PaginationItem>
+                                                <PaginationPrevious
+                                                    onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                                                    className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                                                />
+                                            </PaginationItem>
+
+                                            {renderPaginationItems()}
+
+                                            <PaginationItem>
+                                                <PaginationNext
+                                                    onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                                                    className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                                                />
+                                            </PaginationItem>
+                                        </PaginationContent>
+                                    </Pagination>
                                 </div>
-                            </CardHeader>
-                            <CardContent className='pt-0'>
-                                <div className='mb-4 space-y-3 text-sm'>
-                                    <div className='flex items-center justify-between'>
-                                        <span className='text-muted-foreground'>
-                                            Size
-                                        </span>
-                                        <span className='font-medium'>
-                                            {doc.size}
-                                        </span>
-                                    </div>
-                                    <div className='flex items-center justify-between'>
-                                        <span className='text-muted-foreground'>
-                                            Uploaded
-                                        </span>
-                                        <div className='flex items-center gap-1'>
-                                            <Calendar className='h-3 w-3' />
-                                            <span>{doc.uploadedAt}</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <Button
-                                    className='w-full gap-2'
-                                    variant='default'
-                                    size='sm'
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        router.push(
-                                            `/dashboard/chat/${doc.id}`,
-                                        );
-                                    }}
-                                    disabled={
-                                        doc.status === 'processing' ||
-                                        doc.status === 'error'
-                                    }
-                                >
-                                    <MessageSquare className='h-4 w-4' />
-                                    Chat with AI
-                                </Button>
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
-
-                {/* Pagination */}
-                {totalPages > 1 && (
-                    <div className='flex justify-center'>
-                        <Pagination>
-                            <PaginationContent>
-                                <PaginationItem>
-                                    <PaginationPrevious
-                                        onClick={() =>
-                                            handlePageChange(
-                                                Math.max(1, currentPage - 1),
-                                            )
-                                        }
-                                        className={
-                                            currentPage === 1
-                                                ? 'pointer-events-none opacity-50'
-                                                : 'cursor-pointer'
-                                        }
-                                    />
-                                </PaginationItem>
-
-                                {renderPaginationItems()}
-
-                                <PaginationItem>
-                                    <PaginationNext
-                                        onClick={() =>
-                                            handlePageChange(
-                                                Math.min(
-                                                    totalPages,
-                                                    currentPage + 1,
-                                                ),
-                                            )
-                                        }
-                                        className={
-                                            currentPage === totalPages
-                                                ? 'pointer-events-none opacity-50'
-                                                : 'cursor-pointer'
-                                        }
-                                    />
-                                </PaginationItem>
-                            </PaginationContent>
-                        </Pagination>
-                    </div>
-                )}
+                            )}
+                        </>
+                    )}
+                </Suspense>
             </div>
 
             {/* Delete Confirmation Dialog */}
-            <AlertDialog
-                open={deleteDialogOpen}
-                onOpenChange={setDeleteDialogOpen}
-            >
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>Delete Document</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Are you sure you want to delete "
-                            {selectedDoc?.title}"? This action cannot be undone
-                            and the document will be permanently removed.
+                            Are you sure you want to delete "{selectedDoc?.name}"? This action cannot be undone and the document will be permanently removed.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
                         <AlertDialogAction
                             onClick={handleDeleteConfirm}
                             className='bg-red-600 text-white hover:bg-red-700'
+                            disabled={isDeleting}
                         >
+                            {isDeleting ? <Spinner size="sm" className="mr-2" /> : null}
                             Delete
                         </AlertDialogAction>
                     </AlertDialogFooter>
@@ -536,16 +571,12 @@ export function DocumentGrid() {
             </AlertDialog>
 
             {/* Share Dialog */}
-            <AlertDialog
-                open={shareDialogOpen}
-                onOpenChange={setShareDialogOpen}
-            >
+            <AlertDialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>Share Document</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Share "{selectedDoc?.title}" with others. Anyone
-                            with the link will be able to view this document.
+                            Share "{selectedDoc?.name}" with others. Anyone with the link will be able to view this document.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <div className='flex items-center space-x-2'>
@@ -553,9 +584,7 @@ export function DocumentGrid() {
                             <div className='flex items-center space-x-2'>
                                 <div className='bg-muted flex-1 overflow-hidden rounded-md border px-3 py-2 text-sm'>
                                     <span className='truncate'>
-                                        {selectedDoc
-                                            ? `${window.location.origin}/share/${selectedDoc.id}`
-                                            : ''}
+                                        {selectedDoc?.publicUrl || ''}
                                     </span>
                                 </div>
                                 <Button
@@ -585,17 +614,12 @@ export function DocumentGrid() {
             </AlertDialog>
 
             {/* Download Confirmation Dialog */}
-            <AlertDialog
-                open={downloadDialogOpen}
-                onOpenChange={setDownloadDialogOpen}
-            >
+            <AlertDialog open={downloadDialogOpen} onOpenChange={setDownloadDialogOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>Download Document</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Are you sure you want to download "
-                            {selectedDoc?.title}"? The file will be saved to
-                            your device.
+                            Are you sure you want to download "{selectedDoc?.name}"? The file will be saved to your device.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

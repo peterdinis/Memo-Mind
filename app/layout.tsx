@@ -4,6 +4,7 @@ import './globals.css';
 import { ThemeProvider } from '@/components/providers/theme-provider';
 import { TransitionProvider } from '@/components/providers/TransitionProvider';
 import { ScrollToTop } from '@/components/shared/ScrollToTop';
+import { Toaster } from 'sonner';
 
 // Configure the Inter font
 const ubuntu = Ubuntu({
@@ -57,6 +58,7 @@ export default function RootLayout({
                     <TransitionProvider>
                         {children}
                         <ScrollToTop />
+                        <Toaster />
                     </TransitionProvider>
                 </ThemeProvider>
             </body>
