@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import Link from 'next/link'
 import { useAuth } from '@/hooks/auth/useAuth'
+import AuthWrapper from './AuthWrapper'
 
 type FormData = z.infer<typeof signUpSchema>
 
@@ -34,7 +35,8 @@ export const SignUpForm = () => {
   }
 
   return (
-    <Card className="mx-auto max-w-sm">
+    <AuthWrapper>
+      <Card className="mx-auto max-w-sm">
       <CardHeader>
         <CardTitle className="text-2xl">Sign Up</CardTitle>
         <CardDescription>
@@ -100,5 +102,6 @@ export const SignUpForm = () => {
         </div>
       </CardContent>
     </Card>
+    </AuthWrapper>
   )
 }

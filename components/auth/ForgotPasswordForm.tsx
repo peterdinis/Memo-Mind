@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
 import { forgotPasswordAction } from '@/actions/authActions'
+import AuthWrapper from './AuthWrapper'
 
 type FormData = z.infer<typeof forgotPasswordSchema>
 
@@ -42,7 +43,8 @@ export const ForgotPasswordForm = () => {
   }
 
   return (
-    <Card className="mx-auto max-w-sm">
+    <AuthWrapper>
+      <Card className="mx-auto max-w-sm">
       <CardHeader>
         <CardTitle className="text-2xl">Reset Password</CardTitle>
         <CardDescription>
@@ -72,5 +74,6 @@ export const ForgotPasswordForm = () => {
         </form>
       </CardContent>
     </Card>
+    </AuthWrapper>
   )
 }

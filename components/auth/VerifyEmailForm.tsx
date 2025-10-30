@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
 import { verifyEmailAction } from '@/actions/authActions'
+import AuthWrapper from './AuthWrapper'
 
 export const VerifyEmailForm = () => {
   const { execute: verifyEmail, isExecuting: verifying } = useAction(verifyEmailAction, {
@@ -17,7 +18,8 @@ export const VerifyEmailForm = () => {
   })
 
   return (
-    <Card>
+    <AuthWrapper>
+      <Card>
       <CardHeader>
         <CardTitle>Verify Your Email</CardTitle>
         <CardDescription>
@@ -37,5 +39,6 @@ export const VerifyEmailForm = () => {
         </Button>
       </CardContent>
     </Card>
+    </AuthWrapper>
   )
 }
