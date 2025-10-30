@@ -1,7 +1,11 @@
 'use server';
 
 import { authenticatedAction } from '@/lib/next-safe-action';
-import { deleteFileSchema, uploadFileSchema, userFilesSchema } from '@/schemas/uploadSchemas';
+import {
+    deleteFileSchema,
+    uploadFileSchema,
+    userFilesSchema,
+} from '@/schemas/uploadSchemas';
 import { createClient } from '@/supabase/server';
 
 export const uploadFileAction = authenticatedAction
@@ -9,14 +13,25 @@ export const uploadFileAction = authenticatedAction
     .action(async ({ parsedInput: { files, folder } }) => {
         const supabase = await createClient();
 
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        const {
+            data: { user },
+            error: userError,
+        } = await supabase.auth.getUser();
 
         if (userError || !user) {
             throw new Error('User not authenticated');
         }
 
         const userId = user.id;
-        const uploadResults: { fileName: string; success: boolean; publicUrl?: string; filePath?: string; size?: number; type?: string; error?: string; }[] = [];
+        const uploadResults: {
+            fileName: string;
+            success: boolean;
+            publicUrl?: string;
+            filePath?: string;
+            size?: number;
+            type?: string;
+            error?: string;
+        }[] = [];
 
         for (const file of files) {
             try {
@@ -35,7 +50,9 @@ export const uploadFileAction = authenticatedAction
                     });
 
                 if (error) {
-                    throw new Error(`Failed to upload ${file.name}: ${error.message}`);
+                    throw new Error(
+                        `Failed to upload ${file.name}: ${error.message}`,
+                    );
                 }
 
                 const { data: urlData } = supabase.storage
@@ -50,28 +67,30 @@ export const uploadFileAction = authenticatedAction
                     size: file.size,
                     type: file.type,
                 });
-
             } catch (error) {
                 uploadResults.push({
                     fileName: file.name,
                     success: false,
-                    error: error instanceof Error ? error.message : 'Unknown error',
+                    error:
+                        error instanceof Error
+                            ? error.message
+                            : 'Unknown error',
                 });
             }
         }
 
-        const failedUploads = uploadResults.filter(result => !result.success);
+        const failedUploads = uploadResults.filter((result) => !result.success);
 
         if (failedUploads.length > 0) {
             throw new Error(
-                `Failed to upload ${failedUploads.length} file(s): ${failedUploads.map(f => f.fileName).join(', ')}`
+                `Failed to upload ${failedUploads.length} file(s): ${failedUploads.map((f) => f.fileName).join(', ')}`,
             );
         }
 
         return {
             success: true,
             message: `Successfully uploaded ${uploadResults.length} file(s)`,
-            results: uploadResults
+            results: uploadResults,
         };
     });
 
@@ -80,7 +99,10 @@ export const getUserFilesAction = authenticatedAction
     .action(async () => {
         const supabase = await createClient();
 
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        const {
+            data: { user },
+            error: userError,
+        } = await supabase.auth.getUser();
 
         if (userError || !user) {
             throw new Error('User not authenticated');
@@ -102,7 +124,7 @@ export const getUserFilesAction = authenticatedAction
             throw new Error(`Failed to fetch files: ${error.message}`);
         }
 
-        const filesWithUrls = (files || []).map(file => ({
+        const filesWithUrls = (files || []).map((file) => ({
             id: file.id,
             name: file.name.replace(/^\d+_/, ''),
             originalName: file.name,
@@ -111,7 +133,7 @@ export const getUserFilesAction = authenticatedAction
             last_accessed_at: file.last_accessed_at,
             metadata: file.metadata,
             size: file.metadata?.size || 0,
-            publicUrl: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/documents/${userId}/documents/${file.name}`
+            publicUrl: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/documents/${userId}/documents/${file.name}`,
         }));
 
         return { files: filesWithUrls };
@@ -122,7 +144,10 @@ export const deleteFileAction = authenticatedAction
     .action(async ({ parsedInput: { filePath } }) => {
         const supabase = await createClient();
 
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        const {
+            data: { user },
+            error: userError,
+        } = await supabase.auth.getUser();
 
         if (userError || !user) {
             throw new Error('User not authenticated');
@@ -139,7 +164,9 @@ export const deleteFileAction = authenticatedAction
             .remove([filePath]);
 
         if (storageError) {
-            throw new Error(`Failed to delete file from storage: ${storageError.message}`);
+            throw new Error(
+                `Failed to delete file from storage: ${storageError.message}`,
+            );
         }
 
         return { success: true, message: 'File deleted successfully' };
@@ -150,7 +177,10 @@ export const getFileDetailsAction = authenticatedAction
     .action(async ({ parsedInput: { filePath } }) => {
         const supabase = await createClient();
 
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        const {
+            data: { user },
+            error: userError,
+        } = await supabase.auth.getUser();
 
         if (userError || !user) {
             throw new Error('User not authenticated');
@@ -168,6 +198,6 @@ export const getFileDetailsAction = authenticatedAction
 
         return {
             publicUrl: fileDetails.publicUrl,
-            filePath: filePath
+            filePath: filePath,
         };
     });

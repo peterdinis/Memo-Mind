@@ -17,15 +17,20 @@ interface UploadedFile {
 }
 
 const UploadCard: FC = () => {
-    const { execute: uploadFiles, isPending: isUploading } = useAction(uploadFileAction, {
-        onSuccess: (data) => {
-            toast.success(data.data?.message || 'Files uploaded successfully');
-            form.reset();
+    const { execute: uploadFiles, isPending: isUploading } = useAction(
+        uploadFileAction,
+        {
+            onSuccess: (data) => {
+                toast.success(
+                    data.data?.message || 'Files uploaded successfully',
+                );
+                form.reset();
+            },
+            onError: (error) => {
+                toast.error('Failed to upload files');
+            },
         },
-        onError: (error) => {
-            toast.error('Failed to upload files');
-        },
-    });
+    );
 
     const form = useForm({
         defaultValues: {
@@ -46,13 +51,13 @@ const UploadCard: FC = () => {
                         size: uploadedFile.file.size,
                         data: base64,
                     };
-                })
+                }),
             );
 
             // Execute upload action
-            uploadFiles({ 
+            uploadFiles({
                 files: filesWithData,
-                folder: 'documents'
+                folder: 'documents',
             });
 
             // Toast sa zavrie automaticky cez onSuccess/onError
@@ -65,7 +70,7 @@ const UploadCard: FC = () => {
             const reader = new FileReader();
             reader.readAsDataURL(file);
             reader.onload = () => resolve(reader.result as string);
-            reader.onerror = error => reject(error);
+            reader.onerror = (error) => reject(error);
         });
     };
 
@@ -83,7 +88,9 @@ const UploadCard: FC = () => {
             form.setFieldValue('files', [...currentFiles, ...newFiles]);
 
             if (newFiles.length > 0) {
-                toast.success(`Added ${newFiles.length} file(s) to upload list`);
+                toast.success(
+                    `Added ${newFiles.length} file(s) to upload list`,
+                );
             }
         },
         [form],
@@ -91,8 +98,10 @@ const UploadCard: FC = () => {
 
     const removeFile = (fileId: string) => {
         const currentFiles = form.getFieldValue('files');
-        const fileToRemove = currentFiles.find((f: UploadedFile) => f.id === fileId);
-        
+        const fileToRemove = currentFiles.find(
+            (f: UploadedFile) => f.id === fileId,
+        );
+
         // Clean up object URLs
         if (fileToRemove?.preview) {
             URL.revokeObjectURL(fileToRemove.preview);
@@ -206,7 +215,9 @@ const UploadCard: FC = () => {
                         <div className='flex justify-end pt-2'>
                             <Button
                                 type='submit'
-                                disabled={uploadedFiles.length === 0 || isUploading}
+                                disabled={
+                                    uploadedFiles.length === 0 || isUploading
+                                }
                             >
                                 {isUploading ? (
                                     <>Uploading...</>

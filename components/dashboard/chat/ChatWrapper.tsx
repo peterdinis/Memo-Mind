@@ -114,7 +114,8 @@ const initialMessages: Message[] = [
     {
         id: '1',
         role: 'assistant',
-        content: "Hello! I'm ready to help you analyze your documents. What would you like to know?",
+        content:
+            "Hello! I'm ready to help you analyze your documents. What would you like to know?",
         timestamp: new Date(Date.now() - 3600000),
     },
 ];
@@ -122,7 +123,9 @@ const initialMessages: Message[] = [
 export function DocumentChat() {
     const router = useRouter();
     const [documents, setDocuments] = useState<Document[]>(mockDocuments);
-    const [selectedDocument, setSelectedDocument] = useState<Document | null>(mockDocuments[0]);
+    const [selectedDocument, setSelectedDocument] = useState<Document | null>(
+        mockDocuments[0],
+    );
     const [messages, setMessages] = useState<Message[]>(initialMessages);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -138,19 +141,21 @@ export function DocumentChat() {
     const getFileIcon = (type: DocumentType) => {
         switch (type) {
             case 'PDF':
-                return <FileText className="h-4 w-4 text-red-600" />;
+                return <FileText className='h-4 w-4 text-red-600' />;
             case 'DOCX':
-                return <FileText className="h-4 w-4 text-blue-600" />;
+                return <FileText className='h-4 w-4 text-blue-600' />;
             case 'TXT':
-                return <FileText className="h-4 w-4 text-gray-600" />;
+                return <FileText className='h-4 w-4 text-gray-600' />;
             case 'IMAGE':
-                return <Image className="h-4 w-4 text-green-600" />;
+                return <Image className='h-4 w-4 text-green-600' />;
             default:
-                return <FileCode className="h-4 w-4 text-orange-600" />;
+                return <FileCode className='h-4 w-4 text-orange-600' />;
         }
     };
 
-    const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileUpload = async (
+        event: React.ChangeEvent<HTMLInputElement>,
+    ) => {
         const files = event.target.files;
         if (!files || files.length === 0) return;
 
@@ -168,16 +173,16 @@ export function DocumentChat() {
                 file: file,
             };
 
-            setDocuments(prev => [newDoc, ...prev]);
-            
+            setDocuments((prev) => [newDoc, ...prev]);
+
             // Simulate processing
             setTimeout(() => {
-                setDocuments(prev => 
-                    prev.map(doc => 
-                        doc.id === newDoc.id 
+                setDocuments((prev) =>
+                    prev.map((doc) =>
+                        doc.id === newDoc.id
                             ? { ...doc, status: 'processed' }
-                            : doc
-                    )
+                            : doc,
+                    ),
                 );
                 if (!selectedDocument) {
                     setSelectedDocument({ ...newDoc, status: 'processed' });
@@ -196,7 +201,8 @@ export function DocumentChat() {
         if (ext === 'pdf') return 'PDF';
         if (['doc', 'docx'].includes(ext!)) return 'DOCX';
         if (ext === 'txt') return 'TXT';
-        if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext!)) return 'IMAGE';
+        if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext!))
+            return 'IMAGE';
         return 'OTHER';
     };
 
@@ -218,7 +224,7 @@ export function DocumentChat() {
             timestamp: new Date(),
         };
 
-        setMessages(prev => [...prev, userMessage]);
+        setMessages((prev) => [...prev, userMessage]);
         setInput('');
         setIsLoading(true);
 
@@ -230,7 +236,7 @@ export function DocumentChat() {
                 content: `I've analyzed your question about "${input}" in the document "${selectedDocument.title}". Based on the content, here's what I found...`,
                 timestamp: new Date(),
             };
-            setMessages(prev => [...prev, aiResponse]);
+            setMessages((prev) => [...prev, aiResponse]);
             setIsLoading(false);
         }, 1500);
     };
@@ -244,20 +250,24 @@ export function DocumentChat() {
 
     const handleDeleteDocument = (docId: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        setDocuments(prev => prev.filter(doc => doc.id !== docId));
+        setDocuments((prev) => prev.filter((doc) => doc.id !== docId));
         if (selectedDocument?.id === docId) {
-            setSelectedDocument(documents.find(doc => doc.id !== docId) || null);
+            setSelectedDocument(
+                documents.find((doc) => doc.id !== docId) || null,
+            );
         }
     };
 
     const renderDocumentContent = (doc: Document) => {
         if (doc.status === 'uploading' || doc.status === 'processing') {
             return (
-                <div className="flex h-32 items-center justify-center">
-                    <div className="text-center">
-                        <div className="bg-primary/20 mx-auto mb-2 h-8 w-8 animate-spin rounded-full"></div>
-                        <p className="text-muted-foreground text-sm">
-                            {doc.status === 'uploading' ? 'Uploading...' : 'Processing...'}
+                <div className='flex h-32 items-center justify-center'>
+                    <div className='text-center'>
+                        <div className='bg-primary/20 mx-auto mb-2 h-8 w-8 animate-spin rounded-full'></div>
+                        <p className='text-muted-foreground text-sm'>
+                            {doc.status === 'uploading'
+                                ? 'Uploading...'
+                                : 'Processing...'}
                         </p>
                     </div>
                 </div>
@@ -266,11 +276,11 @@ export function DocumentChat() {
 
         if (doc.type === 'IMAGE' && doc.file) {
             return (
-                <div className="flex justify-center p-4">
-                    <img 
-                        src={URL.createObjectURL(doc.file)} 
+                <div className='flex justify-center p-4'>
+                    <img
+                        src={URL.createObjectURL(doc.file)}
                         alt={doc.title}
-                        className="max-h-96 rounded-lg object-contain"
+                        className='max-h-96 rounded-lg object-contain'
                     />
                 </div>
             );
@@ -278,31 +288,37 @@ export function DocumentChat() {
 
         if (doc.type === 'PDF') {
             return (
-                <div className="h-full">
-                    <div className="border-b p-4">
-                        <h3 className="font-semibold">PDF Preview</h3>
-                        <p className="text-muted-foreground text-sm">
-                            This is a simulated PDF preview. In a real application, 
-                            you would integrate with a PDF viewer library.
+                <div className='h-full'>
+                    <div className='border-b p-4'>
+                        <h3 className='font-semibold'>PDF Preview</h3>
+                        <p className='text-muted-foreground text-sm'>
+                            This is a simulated PDF preview. In a real
+                            application, you would integrate with a PDF viewer
+                            library.
                         </p>
                     </div>
-                    <ScrollArea className="h-[500px]">
-                        <div className="p-6">
-                            <div className="bg-muted rounded-lg p-8">
-                                <div className="mx-auto max-w-4xl">
-                                    <div className="bg-background border shadow-lg">
+                    <ScrollArea className='h-[500px]'>
+                        <div className='p-6'>
+                            <div className='bg-muted rounded-lg p-8'>
+                                <div className='mx-auto max-w-4xl'>
+                                    <div className='bg-background border shadow-lg'>
                                         {/* Simulated PDF pages */}
-                                        <div className="border-b p-8">
-                                            <h1 className="mb-4 text-2xl font-bold">{doc.title}</h1>
-                                            <div className="text-muted-foreground space-y-2 text-sm">
+                                        <div className='border-b p-8'>
+                                            <h1 className='mb-4 text-2xl font-bold'>
+                                                {doc.title}
+                                            </h1>
+                                            <div className='text-muted-foreground space-y-2 text-sm'>
                                                 <p>Type: {doc.type}</p>
                                                 <p>Size: {doc.size}</p>
-                                                <p>Uploaded: {doc.uploadedAt}</p>
+                                                <p>
+                                                    Uploaded: {doc.uploadedAt}
+                                                </p>
                                             </div>
                                         </div>
-                                        <div className="p-8">
-                                            <pre className="font-sans text-sm whitespace-pre-wrap">
-                                                {doc.content || 'Document content will appear here...'}
+                                        <div className='p-8'>
+                                            <pre className='font-sans text-sm whitespace-pre-wrap'>
+                                                {doc.content ||
+                                                    'Document content will appear here...'}
                                             </pre>
                                         </div>
                                     </div>
@@ -315,9 +331,9 @@ export function DocumentChat() {
         }
 
         return (
-            <ScrollArea className="h-full">
-                <div className="p-6">
-                    <pre className="font-sans text-sm whitespace-pre-wrap">
+            <ScrollArea className='h-full'>
+                <div className='p-6'>
+                    <pre className='font-sans text-sm whitespace-pre-wrap'>
                         {doc.content || 'Document content will appear here...'}
                     </pre>
                 </div>
@@ -334,33 +350,34 @@ export function DocumentChat() {
 
     if (documents.length === 0) {
         return (
-            <div className="bg-background flex min-h-screen flex-col">
-                <main className="container mx-auto flex flex-1 items-center justify-center px-4 py-6">
-                    <div className="w-full max-w-3xl text-center">
-                        <Empty className="border-0 bg-transparent p-16">
-                            <EmptyMedia variant="icon" size="lg">
-                                <FileText className="text-muted-foreground/70 h-12 w-12" />
+            <div className='bg-background flex min-h-screen flex-col'>
+                <main className='container mx-auto flex flex-1 items-center justify-center px-4 py-6'>
+                    <div className='w-full max-w-3xl text-center'>
+                        <Empty className='border-0 bg-transparent p-16'>
+                            <EmptyMedia variant='icon' size='lg'>
+                                <FileText className='text-muted-foreground/70 h-12 w-12' />
                             </EmptyMedia>
 
-                            <EmptyHeader className="mb-8">
-                                <EmptyTitle className="mb-4 text-3xl font-bold">
+                            <EmptyHeader className='mb-8'>
+                                <EmptyTitle className='mb-4 text-3xl font-bold'>
                                     No documents to analyze
                                 </EmptyTitle>
-                                <EmptyDescription className="text-xl leading-8">
+                                <EmptyDescription className='text-xl leading-8'>
                                     Your document library is currently empty.
                                     <br />
-                                    Upload documents to start AI-powered analysis and discussion.
+                                    Upload documents to start AI-powered
+                                    analysis and discussion.
                                 </EmptyDescription>
                             </EmptyHeader>
 
-                            <EmptyContent className="mx-auto max-w-md">
+                            <EmptyContent className='mx-auto max-w-md'>
                                 <input
-                                    type="file"
+                                    type='file'
                                     ref={fileInputRef}
                                     onChange={handleFileUpload}
                                     multiple
-                                    accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif,.webp"
-                                    className="hidden"
+                                    accept='.pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif,.webp'
+                                    className='hidden'
                                 />
                             </EmptyContent>
                         </Empty>
@@ -371,43 +388,45 @@ export function DocumentChat() {
     }
 
     return (
-        <div className="bg-background flex min-h-screen flex-col">
+        <div className='bg-background flex min-h-screen flex-col'>
             {/* Header */}
-            <header className="bg-card border-b">
-                <div className="container mx-auto flex items-center justify-between px-4 py-4">
-                    <div className="flex items-center gap-4">
+            <header className='bg-card border-b'>
+                <div className='container mx-auto flex items-center justify-between px-4 py-4'>
+                    <div className='flex items-center gap-4'>
                         <Button
-                            variant="ghost"
-                            size="icon"
+                            variant='ghost'
+                            size='icon'
                             onClick={() => router.back()}
-                            className="h-8 w-8"
+                            className='h-8 w-8'
                         >
-                            <ArrowLeft className="h-4 w-4" />
+                            <ArrowLeft className='h-4 w-4' />
                         </Button>
                         <div>
-                            <h1 className="text-2xl font-bold">Document Chat</h1>
-                            <p className="text-muted-foreground text-sm">
+                            <h1 className='text-2xl font-bold'>
+                                Document Chat
+                            </h1>
+                            <p className='text-muted-foreground text-sm'>
                                 AI-powered document analysis and discussion
                             </p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className='flex items-center gap-2'>
                         <input
-                            type="file"
+                            type='file'
                             ref={fileInputRef}
                             onChange={handleFileUpload}
                             multiple
-                            accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif,.webp"
-                            className="hidden"
+                            accept='.pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif,.webp'
+                            className='hidden'
                         />
                         <Button
                             onClick={() => fileInputRef.current?.click()}
-                            variant="outline"
-                            size="sm"
-                            className="flex items-center gap-2"
+                            variant='outline'
+                            size='sm'
+                            className='flex items-center gap-2'
                             disabled={uploading}
                         >
-                            <Upload className="h-4 w-4" />
+                            <Upload className='h-4 w-4' />
                             {uploading ? 'Uploading...' : 'Upload'}
                         </Button>
                     </div>
@@ -415,61 +434,71 @@ export function DocumentChat() {
             </header>
 
             {/* Main Content */}
-            <main className="container mx-auto grid flex-1 grid-cols-1 gap-6 overflow-hidden px-4 py-6 lg:grid-cols-3">
+            <main className='container mx-auto grid flex-1 grid-cols-1 gap-6 overflow-hidden px-4 py-6 lg:grid-cols-3'>
                 {/* Left Sidebar - Document List */}
-                <Card className="lg:col-span-1">
+                <Card className='lg:col-span-1'>
                     <CardHeader>
                         <CardTitle>Documents</CardTitle>
-                        <p className="text-muted-foreground text-sm">
+                        <p className='text-muted-foreground text-sm'>
                             {documents.length} document(s) loaded
                         </p>
                     </CardHeader>
-                    <CardContent className="p-0">
-                        <ScrollArea className="h-[600px]">
-                            <div className="space-y-2 p-4">
+                    <CardContent className='p-0'>
+                        <ScrollArea className='h-[600px]'>
+                            <div className='space-y-2 p-4'>
                                 {documents.map((doc) => (
                                     <div
                                         key={doc.id}
-                                        className={`cursor-pointer rounded-lg border p-3 transition-all hover:bg-muted/50 ${
+                                        className={`hover:bg-muted/50 cursor-pointer rounded-lg border p-3 transition-all ${
                                             selectedDocument?.id === doc.id
                                                 ? 'border-primary bg-muted'
                                                 : 'border-transparent'
                                         }`}
                                         onClick={() => setSelectedDocument(doc)}
                                     >
-                                        <div className="flex items-start justify-between">
-                                            <div className="flex items-center gap-2">
+                                        <div className='flex items-start justify-between'>
+                                            <div className='flex items-center gap-2'>
                                                 {getFileIcon(doc.type)}
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="truncate text-sm font-medium">
+                                                <div className='min-w-0 flex-1'>
+                                                    <p className='truncate text-sm font-medium'>
                                                         {doc.title}
                                                     </p>
-                                                    <div className="text-muted-foreground flex items-center gap-2 text-xs">
+                                                    <div className='text-muted-foreground flex items-center gap-2 text-xs'>
                                                         <span>{doc.type}</span>
                                                         <span>•</span>
                                                         <span>{doc.size}</span>
                                                         <span>•</span>
-                                                        <span>{doc.uploadedAt}</span>
+                                                        <span>
+                                                            {doc.uploadedAt}
+                                                        </span>
                                                     </div>
                                                 </div>
                                             </div>
                                             <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-6 w-6"
-                                                onClick={(e) => handleDeleteDocument(doc.id, e)}
+                                                variant='ghost'
+                                                size='icon'
+                                                className='h-6 w-6'
+                                                onClick={(e) =>
+                                                    handleDeleteDocument(
+                                                        doc.id,
+                                                        e,
+                                                    )
+                                                }
                                             >
-                                                <X className="h-3 w-3" />
+                                                <X className='h-3 w-3' />
                                             </Button>
                                         </div>
-                                        <div className="mt-2 flex items-center justify-between">
-                                            <Badge 
+                                        <div className='mt-2 flex items-center justify-between'>
+                                            <Badge
                                                 variant={
-                                                    doc.status === 'processed' ? 'default' :
-                                                    doc.status === 'processing' ? 'secondary' :
-                                                    'outline'
+                                                    doc.status === 'processed'
+                                                        ? 'default'
+                                                        : doc.status ===
+                                                            'processing'
+                                                          ? 'secondary'
+                                                          : 'outline'
                                                 }
-                                                className="text-xs capitalize"
+                                                className='text-xs capitalize'
                                             >
                                                 {doc.status}
                                             </Badge>
@@ -482,40 +511,50 @@ export function DocumentChat() {
                 </Card>
 
                 {/* Middle - Document Viewer */}
-                <Card className="flex flex-col overflow-hidden lg:col-span-1">
-                    <CardHeader className="pb-4">
-                        <div className="flex items-center justify-between">
-                            <CardTitle className="flex items-center gap-2">
-                                {selectedDocument && getFileIcon(selectedDocument.type)}
-                                {selectedDocument?.title || 'No document selected'}
+                <Card className='flex flex-col overflow-hidden lg:col-span-1'>
+                    <CardHeader className='pb-4'>
+                        <div className='flex items-center justify-between'>
+                            <CardTitle className='flex items-center gap-2'>
+                                {selectedDocument &&
+                                    getFileIcon(selectedDocument.type)}
+                                {selectedDocument?.title ||
+                                    'No document selected'}
                             </CardTitle>
                             {selectedDocument && (
-                                <Badge variant="secondary" className="capitalize">
+                                <Badge
+                                    variant='secondary'
+                                    className='capitalize'
+                                >
                                     {selectedDocument.type}
                                 </Badge>
                             )}
                         </div>
                         {selectedDocument && (
-                            <div className="text-muted-foreground flex items-center gap-4 text-sm">
+                            <div className='text-muted-foreground flex items-center gap-4 text-sm'>
                                 <span>Size: {selectedDocument.size}</span>
-                                <span>Uploaded: {selectedDocument.uploadedAt}</span>
+                                <span>
+                                    Uploaded: {selectedDocument.uploadedAt}
+                                </span>
                                 <span>Status: {selectedDocument.status}</span>
                             </div>
                         )}
                     </CardHeader>
-                    <CardContent className="flex-1 overflow-hidden p-0">
+                    <CardContent className='flex-1 overflow-hidden p-0'>
                         {selectedDocument ? (
                             renderDocumentContent(selectedDocument)
                         ) : (
-                            <div className="flex h-full items-center justify-center">
+                            <div className='flex h-full items-center justify-center'>
                                 <Empty>
                                     <EmptyMedia>
-                                        <File className="text-muted-foreground h-8 w-8" />
+                                        <File className='text-muted-foreground h-8 w-8' />
                                     </EmptyMedia>
                                     <EmptyHeader>
-                                        <EmptyTitle>No document selected</EmptyTitle>
+                                        <EmptyTitle>
+                                            No document selected
+                                        </EmptyTitle>
                                         <EmptyDescription>
-                                            Select a document from the list to view its content
+                                            Select a document from the list to
+                                            view its content
                                         </EmptyDescription>
                                     </EmptyHeader>
                                 </Empty>
@@ -525,24 +564,23 @@ export function DocumentChat() {
                 </Card>
 
                 {/* Right - Chat Panel */}
-                <Card className="flex flex-col overflow-hidden lg:col-span-1">
-                    <CardHeader className="pb-4">
-                        <CardTitle className="flex items-center gap-2">
-                            <Bot className="h-5 w-5 text-green-600" />
+                <Card className='flex flex-col overflow-hidden lg:col-span-1'>
+                    <CardHeader className='pb-4'>
+                        <CardTitle className='flex items-center gap-2'>
+                            <Bot className='h-5 w-5 text-green-600' />
                             AI Assistant
                         </CardTitle>
-                        <p className="text-muted-foreground text-sm">
-                            {selectedDocument 
+                        <p className='text-muted-foreground text-sm'>
+                            {selectedDocument
                                 ? `Ask questions about "${selectedDocument.title}"`
-                                : 'Select a document to start chatting'
-                            }
+                                : 'Select a document to start chatting'}
                         </p>
                     </CardHeader>
 
-                    <CardContent className="flex flex-1 flex-col overflow-hidden p-0">
+                    <CardContent className='flex flex-1 flex-col overflow-hidden p-0'>
                         {/* Scrollable Chat Area */}
-                        <div className="flex-1 overflow-y-auto px-6 py-4">
-                            <div className="space-y-6">
+                        <div className='flex-1 overflow-y-auto px-6 py-4'>
+                            <div className='space-y-6'>
                                 {messages.map((message) => (
                                     <div
                                         key={message.id}
@@ -560,9 +598,9 @@ export function DocumentChat() {
                                             }`}
                                         >
                                             {message.role === 'user' ? (
-                                                <User className="h-4 w-4" />
+                                                <User className='h-4 w-4' />
                                             ) : (
-                                                <Bot className="h-4 w-4" />
+                                                <Bot className='h-4 w-4' />
                                             )}
                                         </div>
                                         <div
@@ -579,39 +617,44 @@ export function DocumentChat() {
                                                         : 'bg-muted'
                                                 }`}
                                             >
-                                                <p className="text-sm">
+                                                <p className='text-sm'>
                                                     {message.content}
                                                 </p>
                                             </div>
-                                            <p className="text-muted-foreground text-xs">
-                                                {message.timestamp.toLocaleTimeString([], {
-                                                    hour: '2-digit',
-                                                    minute: '2-digit',
-                                                })}
+                                            <p className='text-muted-foreground text-xs'>
+                                                {message.timestamp.toLocaleTimeString(
+                                                    [],
+                                                    {
+                                                        hour: '2-digit',
+                                                        minute: '2-digit',
+                                                    },
+                                                )}
                                             </p>
                                         </div>
                                     </div>
                                 ))}
 
                                 {isLoading && (
-                                    <div className="flex gap-3">
-                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-600 dark:bg-green-900/20">
-                                            <Bot className="h-4 w-4" />
+                                    <div className='flex gap-3'>
+                                        <div className='flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-600 dark:bg-green-900/20'>
+                                            <Bot className='h-4 w-4' />
                                         </div>
-                                        <div className="flex-1 space-y-2">
-                                            <div className="bg-muted inline-block rounded-lg px-4 py-2">
-                                                <div className="flex space-x-1">
-                                                    <div className="bg-muted-foreground h-2 w-2 animate-bounce rounded-full"></div>
+                                        <div className='flex-1 space-y-2'>
+                                            <div className='bg-muted inline-block rounded-lg px-4 py-2'>
+                                                <div className='flex space-x-1'>
+                                                    <div className='bg-muted-foreground h-2 w-2 animate-bounce rounded-full'></div>
                                                     <div
-                                                        className="bg-muted-foreground h-2 w-2 animate-bounce rounded-full"
+                                                        className='bg-muted-foreground h-2 w-2 animate-bounce rounded-full'
                                                         style={{
-                                                            animationDelay: '0.1s',
+                                                            animationDelay:
+                                                                '0.1s',
                                                         }}
                                                     ></div>
                                                     <div
-                                                        className="bg-muted-foreground h-2 w-2 animate-bounce rounded-full"
+                                                        className='bg-muted-foreground h-2 w-2 animate-bounce rounded-full'
                                                         style={{
-                                                            animationDelay: '0.2s',
+                                                            animationDelay:
+                                                                '0.2s',
                                                         }}
                                                     ></div>
                                                 </div>
@@ -626,29 +669,33 @@ export function DocumentChat() {
 
                         {/* Suggested Questions */}
                         {selectedDocument && messages.length <= 1 && (
-                            <div className="px-6 pb-4">
-                                <p className="text-muted-foreground mb-3 text-sm">
+                            <div className='px-6 pb-4'>
+                                <p className='text-muted-foreground mb-3 text-sm'>
                                     Try asking about this document:
                                 </p>
-                                <div className="flex flex-wrap gap-2">
-                                    {suggestedQuestions.map((question, index) => (
-                                        <Button
-                                            key={index}
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-auto px-3 py-2 text-xs"
-                                            onClick={() => setInput(question)}
-                                        >
-                                            {question}
-                                        </Button>
-                                    ))}
+                                <div className='flex flex-wrap gap-2'>
+                                    {suggestedQuestions.map(
+                                        (question, index) => (
+                                            <Button
+                                                key={index}
+                                                variant='outline'
+                                                size='sm'
+                                                className='h-auto px-3 py-2 text-xs'
+                                                onClick={() =>
+                                                    setInput(question)
+                                                }
+                                            >
+                                                {question}
+                                            </Button>
+                                        ),
+                                    )}
                                 </div>
                             </div>
                         )}
 
                         {/* Input Bar */}
-                        <div className="border-t p-4">
-                            <div className="flex gap-2">
+                        <div className='border-t p-4'>
+                            <div className='flex gap-2'>
                                 <Input
                                     value={input}
                                     onChange={(e) => setInput(e.target.value)}
@@ -658,15 +705,19 @@ export function DocumentChat() {
                                             ? `Ask about ${selectedDocument.title}...`
                                             : 'Select a document to start chatting...'
                                     }
-                                    className="flex-1"
+                                    className='flex-1'
                                     disabled={!selectedDocument || isLoading}
                                 />
                                 <Button
                                     onClick={handleSendMessage}
-                                    disabled={!input.trim() || !selectedDocument || isLoading}
-                                    size="icon"
+                                    disabled={
+                                        !input.trim() ||
+                                        !selectedDocument ||
+                                        isLoading
+                                    }
+                                    size='icon'
                                 >
-                                    <Send className="h-4 w-4" />
+                                    <Send className='h-4 w-4' />
                                 </Button>
                             </div>
                         </div>
