@@ -132,8 +132,7 @@ export function DashboardNavbar() {
                                 <Avatar className='h-8 w-8'>
                                     <AvatarImage
                                         src={
-                                            profile?.avatar_url ||
-                                            '/avatars/user.jpg'
+                                            profile?.avatar_url
                                         }
                                         alt='Profile'
                                     />
