@@ -17,6 +17,8 @@ import {
     File,
     Image,
     FileCode,
+    Download,
+    Share2,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import {
@@ -27,21 +29,26 @@ import {
     EmptyDescription,
     EmptyContent,
 } from '@/components/ui/empty';
+import { useAction } from 'next-safe-action/hooks';
+import { getUserFilesAction } from '@/actions/uploadActions';
+import { toast } from 'sonner';
+import { Spinner } from '@/components/ui/spinner';
 
-// Types
 type DocumentType = 'PDF' | 'DOCX' | 'TXT' | 'IMAGE' | 'OTHER';
 type DocumentStatus = 'uploading' | 'processing' | 'processed' | 'error';
 
 interface Document {
     id: string;
+    name: string;
     title: string;
     type: DocumentType;
     uploadedAt: string;
     size: string;
     status: DocumentStatus;
     content?: string;
-    file?: File;
-    url?: string;
+    publicUrl: string;
+    created_at: string;
+    filePath?: string;
 }
 
 interface Message {
@@ -51,88 +58,84 @@ interface Message {
     timestamp: Date;
 }
 
-// Mock documents data
-const mockDocuments: Document[] = [
-    {
-        id: '1',
-        title: 'Project Requirements Document',
-        type: 'PDF',
-        uploadedAt: '2024-01-15',
-        size: '2.4 MB',
-        status: 'processed',
-        content: `# Project Requirements Document
+interface DocumentChatProps {
+    documentId?: string;
+}
 
-## Executive Summary
-This document outlines the requirements for the new enterprise management system.
-
-## Functional Requirements
-- User authentication and authorization
-- Real-time data processing
-- Reporting and analytics dashboard
-- Integration with third-party APIs
-
-## Technical Specifications
-- **Backend**: Node.js with TypeScript
-- **Frontend**: React with Next.js
-- **Database**: PostgreSQL
-- **Deployment**: Docker containers on AWS
-
-## Timeline
-- Phase 1: Q1 2024
-- Phase 2: Q2 2024
-- Phase 3: Q3 2024`,
-    },
-    {
-        id: '2',
-        title: 'Technical Architecture',
-        type: 'PDF',
-        uploadedAt: '2024-01-10',
-        size: '1.8 MB',
-        status: 'processed',
-        content: `# Technical Architecture Document
-
-## System Overview
-Microservices-based architecture with event-driven communication.
-
-## Components
-- API Gateway
-- User Service
-- Payment Service
-- Notification Service
-- Analytics Service
-
-## Infrastructure
-- Kubernetes Cluster
-- Redis Cache
-- Message Queue (RabbitMQ)
-- Monitoring Stack`,
-    },
-];
-
-const initialMessages: Message[] = [
-    {
-        id: '1',
-        role: 'assistant',
-        content:
-            "Hello! I'm ready to help you analyze your documents. What would you like to know?",
-        timestamp: new Date(Date.now() - 3600000),
-    },
-];
-
-export function DocumentChat() {
+export function DocumentChat({ documentId }: DocumentChatProps) {
     const router = useRouter();
-    const [documents, setDocuments] = useState<Document[]>(mockDocuments);
-    const [selectedDocument, setSelectedDocument] = useState<Document | null>(
-        mockDocuments[0],
-    );
-    const [messages, setMessages] = useState<Message[]>(initialMessages);
+    const [documents, setDocuments] = useState<Document[]>([]);
+    const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+    const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [uploading, setUploading] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Scroll to bottom when messages update
+    // Načítanie všetkých dokumentov
+    const { execute: fetchFiles, isPending: isLoadingDocuments } = useAction(
+        getUserFilesAction,
+        {
+            onSuccess: (result) => {
+                if (result.data?.files) {
+                    const transformedDocs = transformFilesData(result.data.files);
+                    setDocuments(transformedDocs);
+                    
+                    // Ak máme documentId, nájdeme a nastavíme konkrétny dokument
+                    if (documentId) {
+                        const doc = transformedDocs.find(d => d.id === documentId);
+                        if (doc) {
+                            setSelectedDocument(doc);
+                            setMessages([{
+                                id: '1',
+                                role: 'assistant',
+                                content: `Hello! I'm ready to help you analyze "${doc.title}". What would you like to know about this document?`,
+                                timestamp: new Date(),
+                            }]);
+                        } else {
+                            toast.error('Document not found');
+                            // Ak dokument nebol nájdený, presmerujeme späť
+                            router.push('/dashboard');
+                        }
+                    } else if (transformedDocs.length > 0) {
+                        // Ak nemáme documentId, vyberieme prvý dokument
+                        setSelectedDocument(transformedDocs[0]);
+                        setMessages([{
+                            id: '1',
+                            role: 'assistant',
+                            content: `Hello! I'm ready to help you analyze "${transformedDocs[0].title}". What would you like to know about this document?`,
+                            timestamp: new Date(),
+                        }]);
+                    }
+                }
+            },
+            onError: (error) => {
+                toast.error('Failed to load documents');
+                console.error('Error loading documents:', error);
+            },
+        },
+    );
+
+    // Transformácia dát z API
+    const transformFilesData = (files: any[]): Document[] => {
+        return files.map((file) => ({
+            id: file.id,
+            name: file.name,
+            title: file.name,
+            type: getFileType(file.name),
+            uploadedAt: file.created_at ? new Date(file.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+            size: formatFileSize(file.size || 0),
+            status: 'processed' as DocumentStatus,
+            publicUrl: file.publicUrl,
+            created_at: file.created_at,
+            filePath: file.originalName || file.name,
+        }));
+    };
+
+    // Načítanie dokumentov pri mount
+    useEffect(() => {
+        fetchFiles({});
+    }, [fetchFiles, documentId]);
+
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
@@ -152,56 +155,12 @@ export function DocumentChat() {
         }
     };
 
-    const handleFileUpload = async (
-        event: React.ChangeEvent<HTMLInputElement>,
-    ) => {
-        const files = event.target.files;
-        if (!files || files.length === 0) return;
-
-        setUploading(true);
-
-        for (const file of Array.from(files)) {
-            const fileType = getFileType(file.name);
-            const newDoc: Document = {
-                id: Date.now().toString(),
-                title: file.name,
-                type: fileType,
-                uploadedAt: new Date().toISOString().split('T')[0],
-                size: formatFileSize(file.size),
-                status: 'processing',
-                file: file,
-            };
-
-            setDocuments((prev) => [newDoc, ...prev]);
-
-            // Simulate processing
-            setTimeout(() => {
-                setDocuments((prev) =>
-                    prev.map((doc) =>
-                        doc.id === newDoc.id
-                            ? { ...doc, status: 'processed' }
-                            : doc,
-                    ),
-                );
-                if (!selectedDocument) {
-                    setSelectedDocument({ ...newDoc, status: 'processed' });
-                }
-            }, 2000);
-        }
-
-        setUploading(false);
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-        }
-    };
-
     const getFileType = (fileName: string): DocumentType => {
         const ext = fileName.split('.').pop()?.toLowerCase();
         if (ext === 'pdf') return 'PDF';
         if (['doc', 'docx'].includes(ext!)) return 'DOCX';
         if (ext === 'txt') return 'TXT';
-        if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext!))
-            return 'IMAGE';
+        if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext!)) return 'IMAGE';
         return 'OTHER';
     };
 
@@ -227,17 +186,35 @@ export function DocumentChat() {
         setInput('');
         setIsLoading(true);
 
-        // Simulate AI response
+        // Simulate AI response based on document
         setTimeout(() => {
             const aiResponse: Message = {
                 id: (Date.now() + 1).toString(),
                 role: 'assistant',
-                content: `I've analyzed your question about "${input}" in the document "${selectedDocument.title}". Based on the content, here's what I found...`,
+                content: generateAIResponse(input, selectedDocument),
                 timestamp: new Date(),
             };
             setMessages((prev) => [...prev, aiResponse]);
             setIsLoading(false);
         }, 1500);
+    };
+
+    const generateAIResponse = (question: string, document: Document): string => {
+        const lowerQuestion = question.toLowerCase();
+        
+        if (lowerQuestion.includes('summary') || lowerQuestion.includes('summarize')) {
+            return `Based on the document "${document.title}", here's a summary:\n\n- Document type: ${document.type}\n- Size: ${document.size}\n- Uploaded: ${document.uploadedAt}\n- This appears to be a ${document.type} document ready for analysis.`;
+        }
+        
+        if (lowerQuestion.includes('size') || lowerQuestion.includes('how big')) {
+            return `The document "${document.title}" is ${document.size} in size. It was uploaded on ${document.uploadedAt}.`;
+        }
+        
+        if (lowerQuestion.includes('type') || lowerQuestion.includes('format')) {
+            return `This document is in ${document.type} format. ${document.type === 'PDF' ? 'PDF documents are great for preserving formatting.' : 'This format is commonly used for editable content.'}`;
+        }
+        
+        return `Regarding your question about "${question}" in the document "${document.title}":\n\nI've analyzed the document and found relevant information. The document contains details about its subject matter. For more specific insights, you can ask about particular aspects of the document.`;
     };
 
     const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -247,140 +224,129 @@ export function DocumentChat() {
         }
     };
 
-    const handleDeleteDocument = (docId: string, e: React.MouseEvent) => {
+    const handleDownloadDocument = (doc: Document, e: React.MouseEvent) => {
         e.stopPropagation();
-        setDocuments((prev) => prev.filter((doc) => doc.id !== docId));
-        if (selectedDocument?.id === docId) {
-            setSelectedDocument(
-                documents.find((doc) => doc.id !== docId) || null,
-            );
-        }
+        const link = document.createElement('a');
+        link.href = doc.publicUrl;
+        link.download = doc.name;
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast.success(`Downloading ${doc.name}`);
+    };
+
+    const handleShareDocument = (doc: Document, e: React.MouseEvent) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(doc.publicUrl).then(() => {
+            toast.success('Document link copied to clipboard');
+        });
     };
 
     const renderDocumentContent = (doc: Document) => {
-        if (doc.status === 'uploading' || doc.status === 'processing') {
-            return (
-                <div className='flex h-32 items-center justify-center'>
-                    <div className='text-center'>
-                        <div className='bg-primary/20 mx-auto mb-2 h-8 w-8 animate-spin rounded-full'></div>
-                        <p className='text-muted-foreground text-sm'>
-                            {doc.status === 'uploading'
-                                ? 'Uploading...'
-                                : 'Processing...'}
-                        </p>
+        return (
+            <div className='h-full'>
+                <div className='border-b p-4'>
+                    <div className='flex items-center justify-between'>
+                        <h3 className='font-semibold'>Document Preview</h3>
+                        <div className='flex gap-2'>
+                            <Button
+                                variant='outline'
+                                size='sm'
+                                onClick={(e) => handleDownloadDocument(doc, e)}
+                            >
+                                <Download className='h-4 w-4' />
+                            </Button>
+                            <Button
+                                variant='outline'
+                                size='sm'
+                                onClick={(e) => handleShareDocument(doc, e)}
+                            >
+                                <Share2 className='h-4 w-4' />
+                            </Button>
+                        </div>
                     </div>
+                    <p className='text-muted-foreground text-sm'>
+                        {doc.type} document - {doc.size}
+                    </p>
                 </div>
-            );
-        }
-
-        if (doc.type === 'IMAGE' && doc.file) {
-            return (
-                <div className='flex justify-center p-4'>
-                    <img
-                        src={URL.createObjectURL(doc.file)}
-                        alt={doc.title}
-                        className='max-h-96 rounded-lg object-contain'
-                    />
-                </div>
-            );
-        }
-
-        if (doc.type === 'PDF') {
-            return (
-                <div className='h-full'>
-                    <div className='border-b p-4'>
-                        <h3 className='font-semibold'>PDF Preview</h3>
-                        <p className='text-muted-foreground text-sm'>
-                            This is a simulated PDF preview. In a real
-                            application, you would integrate with a PDF viewer
-                            library.
-                        </p>
-                    </div>
-                    <ScrollArea className='h-[500px]'>
-                        <div className='p-6'>
-                            <div className='bg-muted rounded-lg p-8'>
-                                <div className='mx-auto max-w-4xl'>
-                                    <div className='bg-background border shadow-lg'>
-                                        {/* Simulated PDF pages */}
-                                        <div className='border-b p-8'>
-                                            <h1 className='mb-4 text-2xl font-bold'>
-                                                {doc.title}
-                                            </h1>
-                                            <div className='text-muted-foreground space-y-2 text-sm'>
-                                                <p>Type: {doc.type}</p>
-                                                <p>Size: {doc.size}</p>
-                                                <p>
-                                                    Uploaded: {doc.uploadedAt}
-                                                </p>
-                                            </div>
+                <ScrollArea className='h-[500px]'>
+                    <div className='p-6'>
+                        <div className='bg-muted rounded-lg p-8'>
+                            <div className='mx-auto max-w-4xl'>
+                                <div className='bg-background border shadow-lg'>
+                                    <div className='border-b p-8'>
+                                        <h1 className='mb-4 text-2xl font-bold'>{doc.title}</h1>
+                                        <div className='text-muted-foreground space-y-2 text-sm'>
+                                            <p>Type: {doc.type}</p>
+                                            <p>Size: {doc.size}</p>
+                                            <p>Uploaded: {doc.uploadedAt}</p>
+                                            <p>Status: {doc.status}</p>
                                         </div>
-                                        <div className='p-8'>
-                                            <pre className='font-sans text-sm whitespace-pre-wrap'>
-                                                {doc.content ||
-                                                    'Document content will appear here...'}
-                                            </pre>
+                                    </div>
+                                    <div className='p-8'>
+                                        <div className='text-center py-8'>
+                                            <FileText className='mx-auto h-16 w-16 text-muted-foreground mb-4' />
+                                            <p className='text-muted-foreground'>
+                                                This is a preview of "{doc.title}". 
+                                                <br />
+                                                The actual document content is stored in Supabase Storage.
+                                            </p>
+                                            <Button 
+                                                className='mt-4'
+                                                onClick={(e) => handleDownloadDocument(doc, e)}
+                                            >
+                                                <Download className='mr-2 h-4 w-4' />
+                                                Download Full Document
+                                            </Button>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </ScrollArea>
-                </div>
-            );
-        }
-
-        return (
-            <ScrollArea className='h-full'>
-                <div className='p-6'>
-                    <pre className='font-sans text-sm whitespace-pre-wrap'>
-                        {doc.content || 'Document content will appear here...'}
-                    </pre>
-                </div>
-            </ScrollArea>
+                    </div>
+                </ScrollArea>
+            </div>
         );
     };
 
     const suggestedQuestions = [
-        'What are the main points of this document?',
-        'Summarize the key requirements',
-        'What technologies are mentioned?',
-        'Explain the timeline and phases',
+        'What is this document about?',
+        'Summarize the main points',
+        'What type of document is this?',
+        'When was this document uploaded?',
     ];
+
+    if (isLoadingDocuments) {
+        return (
+            <div className='flex min-h-screen items-center justify-center'>
+                <Spinner variant="default" size="lg" />
+            </div>
+        );
+    }
 
     if (documents.length === 0) {
         return (
             <div className='bg-background flex min-h-screen flex-col'>
                 <main className='container mx-auto flex flex-1 items-center justify-center px-4 py-6'>
-                    <div className='w-full max-w-3xl text-center'>
-                        <Empty className='border-0 bg-transparent p-16'>
-                            <EmptyMedia variant='icon' size='lg'>
-                                <FileText className='text-muted-foreground/70 h-12 w-12' />
-                            </EmptyMedia>
-
-                            <EmptyHeader className='mb-8'>
-                                <EmptyTitle className='mb-4 text-3xl font-bold'>
-                                    No documents to analyze
-                                </EmptyTitle>
-                                <EmptyDescription className='text-xl leading-8'>
-                                    Your document library is currently empty.
-                                    <br />
-                                    Upload documents to start AI-powered
-                                    analysis and discussion.
-                                </EmptyDescription>
-                            </EmptyHeader>
-
-                            <EmptyContent className='mx-auto max-w-md'>
-                                <input
-                                    type='file'
-                                    ref={fileInputRef}
-                                    onChange={handleFileUpload}
-                                    multiple
-                                    accept='.pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif,.webp'
-                                    className='hidden'
-                                />
-                            </EmptyContent>
-                        </Empty>
-                    </div>
+                    <Empty className='border-0 bg-transparent p-16'>
+                        <EmptyMedia variant='icon' size='lg'>
+                            <FileText className='text-muted-foreground/70 h-12 w-12' />
+                        </EmptyMedia>
+                        <EmptyHeader className='mb-8'>
+                            <EmptyTitle className='mb-4 text-3xl font-bold'>
+                                No documents found
+                            </EmptyTitle>
+                            <EmptyDescription className='text-xl leading-8'>
+                                We couldn't find the document you're looking for.
+                            </EmptyDescription>
+                        </EmptyHeader>
+                        <EmptyContent className='mx-auto max-w-md'>
+                            <Button onClick={() => router.push('/dashboard')}>
+                                Back to Documents
+                            </Button>
+                        </EmptyContent>
+                    </Empty>
                 </main>
             </div>
         );
@@ -388,56 +354,31 @@ export function DocumentChat() {
 
     return (
         <div className='bg-background flex min-h-screen flex-col'>
-            {/* Header */}
             <header className='bg-card border-b'>
                 <div className='container mx-auto flex items-center justify-between px-4 py-4'>
                     <div className='flex items-center gap-4'>
                         <Button
                             variant='ghost'
                             size='icon'
-                            onClick={() => router.back()}
+                            onClick={() => router.push('/dashboard')}
                             className='h-8 w-8'
                         >
                             <ArrowLeft className='h-4 w-4' />
                         </Button>
                         <div>
-                            <h1 className='text-2xl font-bold'>
-                                Document Chat
-                            </h1>
+                            <h1 className='text-2xl font-bold'>Document Chat</h1>
                             <p className='text-muted-foreground text-sm'>
                                 AI-powered document analysis and discussion
                             </p>
                         </div>
                     </div>
-                    <div className='flex items-center gap-2'>
-                        <input
-                            type='file'
-                            ref={fileInputRef}
-                            onChange={handleFileUpload}
-                            multiple
-                            accept='.pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif,.webp'
-                            className='hidden'
-                        />
-                        <Button
-                            onClick={() => fileInputRef.current?.click()}
-                            variant='outline'
-                            size='sm'
-                            className='flex items-center gap-2'
-                            disabled={uploading}
-                        >
-                            <Upload className='h-4 w-4' />
-                            {uploading ? 'Uploading...' : 'Upload'}
-                        </Button>
-                    </div>
                 </div>
             </header>
 
-            {/* Main Content */}
             <main className='container mx-auto grid flex-1 grid-cols-1 gap-6 overflow-hidden px-4 py-6 lg:grid-cols-3'>
-                {/* Left Sidebar - Document List */}
                 <Card className='lg:col-span-1'>
                     <CardHeader>
-                        <CardTitle>Documents</CardTitle>
+                        <CardTitle>Your Documents</CardTitle>
                         <p className='text-muted-foreground text-sm'>
                             {documents.length} document(s) loaded
                         </p>
@@ -453,7 +394,15 @@ export function DocumentChat() {
                                                 ? 'border-primary bg-muted'
                                                 : 'border-transparent'
                                         }`}
-                                        onClick={() => setSelectedDocument(doc)}
+                                        onClick={() => {
+                                            setSelectedDocument(doc);
+                                            setMessages([{
+                                                id: '1',
+                                                role: 'assistant',
+                                                content: `Now analyzing "${doc.title}". What would you like to know about this document?`,
+                                                timestamp: new Date(),
+                                            }]);
+                                        }}
                                     >
                                         <div className='flex items-start justify-between'>
                                             <div className='flex items-center gap-2'>
@@ -467,40 +416,23 @@ export function DocumentChat() {
                                                         <span>•</span>
                                                         <span>{doc.size}</span>
                                                         <span>•</span>
-                                                        <span>
-                                                            {doc.uploadedAt}
-                                                        </span>
+                                                        <span>{doc.uploadedAt}</span>
                                                     </div>
                                                 </div>
                                             </div>
-                                            <Button
-                                                variant='ghost'
-                                                size='icon'
-                                                className='h-6 w-6'
-                                                onClick={(e) =>
-                                                    handleDeleteDocument(
-                                                        doc.id,
-                                                        e,
-                                                    )
-                                                }
-                                            >
-                                                <X className='h-3 w-3' />
-                                            </Button>
                                         </div>
                                         <div className='mt-2 flex items-center justify-between'>
                                             <Badge
-                                                variant={
-                                                    doc.status === 'processed'
-                                                        ? 'default'
-                                                        : doc.status ===
-                                                            'processing'
-                                                          ? 'secondary'
-                                                          : 'outline'
-                                                }
+                                                variant='default'
                                                 className='text-xs capitalize'
                                             >
                                                 {doc.status}
                                             </Badge>
+                                            {documentId === doc.id && (
+                                                <Badge variant="secondary" className="text-xs">
+                                                    Current
+                                                </Badge>
+                                            )}
                                         </div>
                                     </div>
                                 ))}
@@ -509,21 +441,15 @@ export function DocumentChat() {
                     </CardContent>
                 </Card>
 
-                {/* Middle - Document Viewer */}
                 <Card className='flex flex-col overflow-hidden lg:col-span-1'>
                     <CardHeader className='pb-4'>
                         <div className='flex items-center justify-between'>
                             <CardTitle className='flex items-center gap-2'>
-                                {selectedDocument &&
-                                    getFileIcon(selectedDocument.type)}
-                                {selectedDocument?.title ||
-                                    'No document selected'}
+                                {selectedDocument && getFileIcon(selectedDocument.type)}
+                                {selectedDocument?.title || 'No document selected'}
                             </CardTitle>
                             {selectedDocument && (
-                                <Badge
-                                    variant='secondary'
-                                    className='capitalize'
-                                >
+                                <Badge variant='secondary' className='capitalize'>
                                     {selectedDocument.type}
                                 </Badge>
                             )}
@@ -531,9 +457,7 @@ export function DocumentChat() {
                         {selectedDocument && (
                             <div className='text-muted-foreground flex items-center gap-4 text-sm'>
                                 <span>Size: {selectedDocument.size}</span>
-                                <span>
-                                    Uploaded: {selectedDocument.uploadedAt}
-                                </span>
+                                <span>Uploaded: {selectedDocument.uploadedAt}</span>
                                 <span>Status: {selectedDocument.status}</span>
                             </div>
                         )}
@@ -548,12 +472,9 @@ export function DocumentChat() {
                                         <File className='text-muted-foreground h-8 w-8' />
                                     </EmptyMedia>
                                     <EmptyHeader>
-                                        <EmptyTitle>
-                                            No document selected
-                                        </EmptyTitle>
+                                        <EmptyTitle>No document selected</EmptyTitle>
                                         <EmptyDescription>
-                                            Select a document from the list to
-                                            view its content
+                                            Select a document from the list to view its content
                                         </EmptyDescription>
                                     </EmptyHeader>
                                 </Empty>
@@ -562,7 +483,6 @@ export function DocumentChat() {
                     </CardContent>
                 </Card>
 
-                {/* Right - Chat Panel */}
                 <Card className='flex flex-col overflow-hidden lg:col-span-1'>
                     <CardHeader className='pb-4'>
                         <CardTitle className='flex items-center gap-2'>
@@ -577,7 +497,6 @@ export function DocumentChat() {
                     </CardHeader>
 
                     <CardContent className='flex flex-1 flex-col overflow-hidden p-0'>
-                        {/* Scrollable Chat Area */}
                         <div className='flex-1 overflow-y-auto px-6 py-4'>
                             <div className='space-y-6'>
                                 {messages.map((message) => (
@@ -616,18 +535,13 @@ export function DocumentChat() {
                                                         : 'bg-muted'
                                                 }`}
                                             >
-                                                <p className='text-sm'>
-                                                    {message.content}
-                                                </p>
+                                                <p className='text-sm'>{message.content}</p>
                                             </div>
                                             <p className='text-muted-foreground text-xs'>
-                                                {message.timestamp.toLocaleTimeString(
-                                                    [],
-                                                    {
-                                                        hour: '2-digit',
-                                                        minute: '2-digit',
-                                                    },
-                                                )}
+                                                {message.timestamp.toLocaleTimeString([], {
+                                                    hour: '2-digit',
+                                                    minute: '2-digit',
+                                                })}
                                             </p>
                                         </div>
                                     </div>
@@ -644,17 +558,11 @@ export function DocumentChat() {
                                                     <div className='bg-muted-foreground h-2 w-2 animate-bounce rounded-full'></div>
                                                     <div
                                                         className='bg-muted-foreground h-2 w-2 animate-bounce rounded-full'
-                                                        style={{
-                                                            animationDelay:
-                                                                '0.1s',
-                                                        }}
+                                                        style={{ animationDelay: '0.1s' }}
                                                     ></div>
                                                     <div
                                                         className='bg-muted-foreground h-2 w-2 animate-bounce rounded-full'
-                                                        style={{
-                                                            animationDelay:
-                                                                '0.2s',
-                                                        }}
+                                                        style={{ animationDelay: '0.2s' }}
                                                     ></div>
                                                 </div>
                                             </div>
@@ -666,33 +574,27 @@ export function DocumentChat() {
                             </div>
                         </div>
 
-                        {/* Suggested Questions */}
                         {selectedDocument && messages.length <= 1 && (
                             <div className='px-6 pb-4'>
                                 <p className='text-muted-foreground mb-3 text-sm'>
                                     Try asking about this document:
                                 </p>
                                 <div className='flex flex-wrap gap-2'>
-                                    {suggestedQuestions.map(
-                                        (question, index) => (
-                                            <Button
-                                                key={index}
-                                                variant='outline'
-                                                size='sm'
-                                                className='h-auto px-3 py-2 text-xs'
-                                                onClick={() =>
-                                                    setInput(question)
-                                                }
-                                            >
-                                                {question}
-                                            </Button>
-                                        ),
-                                    )}
+                                    {suggestedQuestions.map((question, index) => (
+                                        <Button
+                                            key={index}
+                                            variant='outline'
+                                            size='sm'
+                                            className='h-auto px-3 py-2 text-xs'
+                                            onClick={() => setInput(question)}
+                                        >
+                                            {question}
+                                        </Button>
+                                    ))}
                                 </div>
                             </div>
                         )}
 
-                        {/* Input Bar */}
                         <div className='border-t p-4'>
                             <div className='flex gap-2'>
                                 <Input
@@ -709,11 +611,7 @@ export function DocumentChat() {
                                 />
                                 <Button
                                     onClick={handleSendMessage}
-                                    disabled={
-                                        !input.trim() ||
-                                        !selectedDocument ||
-                                        isLoading
-                                    }
+                                    disabled={!input.trim() || !selectedDocument || isLoading}
                                     size='icon'
                                 >
                                     <Send className='h-4 w-4' />
