@@ -55,14 +55,22 @@ import { toast } from 'sonner';
 import { Spinner } from '@/components/ui/spinner';
 
 const statusVariants = {
-    processing: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400',
-    processed: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400',
+    processing:
+        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400',
+    processed:
+        'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400',
     error: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400',
 };
 
 const ITEMS_PER_PAGE = 8;
 
-type SortOption = 'newest' | 'oldest' | 'name-asc' | 'name-desc' | 'size-asc' | 'size-desc';
+type SortOption =
+    | 'newest'
+    | 'oldest'
+    | 'name-asc'
+    | 'name-desc'
+    | 'size-asc'
+    | 'size-desc';
 
 interface Document {
     id: string;
@@ -104,7 +112,9 @@ export function DocumentGrid() {
         {
             onSuccess: (result) => {
                 if (result.data?.files) {
-                    const transformedDocs = transformFilesData(result.data.files);
+                    const transformedDocs = transformFilesData(
+                        result.data.files,
+                    );
                     setDocuments(transformedDocs);
                 }
             },
@@ -119,7 +129,9 @@ export function DocumentGrid() {
         deleteFileAction,
         {
             onSuccess: (result) => {
-                toast.success(result.data?.message || 'File deleted successfully');
+                toast.success(
+                    result.data?.message || 'File deleted successfully',
+                );
                 fetchFiles({});
             },
             onError: (error) => {
@@ -190,7 +202,7 @@ export function DocumentGrid() {
 
     const handleQuickDownload = (doc: Document, e: React.MouseEvent) => {
         e.stopPropagation();
-        
+
         const link = document.createElement('a');
         link.href = doc.publicUrl;
         link.download = doc.name;
@@ -204,7 +216,7 @@ export function DocumentGrid() {
 
     const handleQuickShare = (doc: Document, e: React.MouseEvent) => {
         e.stopPropagation();
-        
+
         navigator.clipboard.writeText(doc.publicUrl).then(() => {
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
@@ -215,9 +227,15 @@ export function DocumentGrid() {
     const sortedDocuments = [...documents].sort((a, b) => {
         switch (sortBy) {
             case 'newest':
-                return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                return (
+                    new Date(b.created_at).getTime() -
+                    new Date(a.created_at).getTime()
+                );
             case 'oldest':
-                return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+                return (
+                    new Date(a.created_at).getTime() -
+                    new Date(b.created_at).getTime()
+                );
             case 'name-asc':
                 return a.name.localeCompare(b.name);
             case 'name-desc':
@@ -233,7 +251,10 @@ export function DocumentGrid() {
 
     const totalPages = Math.ceil(sortedDocuments.length / ITEMS_PER_PAGE);
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    const currentDocuments = sortedDocuments.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+    const currentDocuments = sortedDocuments.slice(
+        startIndex,
+        startIndex + ITEMS_PER_PAGE,
+    );
 
     const handlePageChange = (page: number) => {
         setCurrentPage(page);
@@ -422,12 +443,24 @@ export function DocumentGrid() {
                                 <SelectValue placeholder='Sort by...' />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value='newest'>Newest first</SelectItem>
-                                <SelectItem value='oldest'>Oldest first</SelectItem>
-                                <SelectItem value='name-asc'>Name A-Z</SelectItem>
-                                <SelectItem value='name-desc'>Name Z-A</SelectItem>
-                                <SelectItem value='size-asc'>Size: Small to Large</SelectItem>
-                                <SelectItem value='size-desc'>Size: Large to Small</SelectItem>
+                                <SelectItem value='newest'>
+                                    Newest first
+                                </SelectItem>
+                                <SelectItem value='oldest'>
+                                    Oldest first
+                                </SelectItem>
+                                <SelectItem value='name-asc'>
+                                    Name A-Z
+                                </SelectItem>
+                                <SelectItem value='name-desc'>
+                                    Name Z-A
+                                </SelectItem>
+                                <SelectItem value='size-asc'>
+                                    Size: Small to Large
+                                </SelectItem>
+                                <SelectItem value='size-desc'>
+                                    Size: Large to Small
+                                </SelectItem>
                             </SelectContent>
                         </Select>
                         <Button variant='outline' size='sm'>
@@ -436,7 +469,9 @@ export function DocumentGrid() {
                     </div>
                 </div>
 
-                <Suspense fallback={<Spinner variant={'default'} size={'lg'} />}>
+                <Suspense
+                    fallback={<Spinner variant={'default'} size={'lg'} />}
+                >
                     {isLoading ? (
                         <Spinner variant={'default'} size={'lg'} />
                     ) : (
@@ -456,32 +491,64 @@ export function DocumentGrid() {
                                                     <FileText className='h-6 w-6 text-blue-600 dark:text-blue-400' />
                                                 </div>
                                                 <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
+                                                    <DropdownMenuTrigger
+                                                        asChild
+                                                    >
                                                         <Button
                                                             variant='ghost'
                                                             size='icon'
                                                             className='h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100'
-                                                            onClick={(e) => e.stopPropagation()}
+                                                            onClick={(e) =>
+                                                                e.stopPropagation()
+                                                            }
                                                         >
                                                             <MoreVertical className='h-4 w-4' />
                                                         </Button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align='end'>
-                                                        <DropdownMenuItem onClick={(e) => handleQuickDownload(doc, e)}>
+                                                        <DropdownMenuItem
+                                                            onClick={(e) =>
+                                                                handleQuickDownload(
+                                                                    doc,
+                                                                    e,
+                                                                )
+                                                            }
+                                                        >
                                                             <Download className='mr-2 h-4 w-4' />
                                                             Download
                                                         </DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={(e) => handleQuickShare(doc, e)}>
+                                                        <DropdownMenuItem
+                                                            onClick={(e) =>
+                                                                handleQuickShare(
+                                                                    doc,
+                                                                    e,
+                                                                )
+                                                            }
+                                                        >
                                                             <Copy className='mr-2 h-4 w-4' />
-                                                            {copied ? 'Copied!' : 'Share'}
+                                                            {copied
+                                                                ? 'Copied!'
+                                                                : 'Share'}
                                                         </DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={(e) => handleChatClick(doc, e)}>
+                                                        <DropdownMenuItem
+                                                            onClick={(e) =>
+                                                                handleChatClick(
+                                                                    doc,
+                                                                    e,
+                                                                )
+                                                            }
+                                                        >
                                                             <MessageSquare className='mr-2 h-4 w-4' />
                                                             Chat with AI
                                                         </DropdownMenuItem>
                                                         <DropdownMenuItem
                                                             className='text-red-600 focus:text-red-600'
-                                                            onClick={(e) => handleDeleteClick(doc, e)}
+                                                            onClick={(e) =>
+                                                                handleDeleteClick(
+                                                                    doc,
+                                                                    e,
+                                                                )
+                                                            }
                                                         >
                                                             <Trash2 className='mr-2 h-4 w-4' />
                                                             Delete
@@ -493,7 +560,10 @@ export function DocumentGrid() {
                                                 {doc.name}
                                             </CardTitle>
                                             <div className='mt-4 flex items-center justify-between'>
-                                                <Badge variant='secondary' className='text-xs'>
+                                                <Badge
+                                                    variant='secondary'
+                                                    className='text-xs'
+                                                >
                                                     {doc.type}
                                                 </Badge>
                                                 <Badge
@@ -511,14 +581,26 @@ export function DocumentGrid() {
                                         <CardContent className='pt-0'>
                                             <div className='mb-4 space-y-3 text-sm'>
                                                 <div className='flex items-center justify-between'>
-                                                    <span className='text-muted-foreground'>Size</span>
-                                                    <span className='font-medium'>{formatFileSize(doc.size)}</span>
+                                                    <span className='text-muted-foreground'>
+                                                        Size
+                                                    </span>
+                                                    <span className='font-medium'>
+                                                        {formatFileSize(
+                                                            doc.size,
+                                                        )}
+                                                    </span>
                                                 </div>
                                                 <div className='flex items-center justify-between'>
-                                                    <span className='text-muted-foreground'>Uploaded</span>
+                                                    <span className='text-muted-foreground'>
+                                                        Uploaded
+                                                    </span>
                                                     <div className='flex items-center gap-1'>
                                                         <Calendar className='h-3 w-3' />
-                                                        <span>{formatDate(doc.created_at)}</span>
+                                                        <span>
+                                                            {formatDate(
+                                                                doc.created_at,
+                                                            )}
+                                                        </span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -527,7 +609,9 @@ export function DocumentGrid() {
                                                 className='w-full gap-2'
                                                 variant='default'
                                                 size='sm'
-                                                onClick={(e) => handleChatClick(doc, e)}
+                                                onClick={(e) =>
+                                                    handleChatClick(doc, e)
+                                                }
                                             >
                                                 <MessageSquare className='h-4 w-4' />
                                                 Chat with AI
@@ -540,9 +624,12 @@ export function DocumentGrid() {
                             {documents.length === 0 && (
                                 <div className='py-12 text-center'>
                                     <FileText className='text-muted-foreground mx-auto mb-4 h-16 w-16' />
-                                    <h3 className='mb-2 text-lg font-semibold'>No documents yet</h3>
+                                    <h3 className='mb-2 text-lg font-semibold'>
+                                        No documents yet
+                                    </h3>
                                     <p className='text-muted-foreground mb-6'>
-                                        Upload your first document to get started
+                                        Upload your first document to get
+                                        started
                                     </p>
                                 </div>
                             )}
@@ -553,8 +640,19 @@ export function DocumentGrid() {
                                         <PaginationContent>
                                             <PaginationItem>
                                                 <PaginationPrevious
-                                                    onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-                                                    className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                                                    onClick={() =>
+                                                        handlePageChange(
+                                                            Math.max(
+                                                                1,
+                                                                currentPage - 1,
+                                                            ),
+                                                        )
+                                                    }
+                                                    className={
+                                                        currentPage === 1
+                                                            ? 'pointer-events-none opacity-50'
+                                                            : 'cursor-pointer'
+                                                    }
                                                 />
                                             </PaginationItem>
 
@@ -562,8 +660,20 @@ export function DocumentGrid() {
 
                                             <PaginationItem>
                                                 <PaginationNext
-                                                    onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
-                                                    className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                                                    onClick={() =>
+                                                        handlePageChange(
+                                                            Math.min(
+                                                                totalPages,
+                                                                currentPage + 1,
+                                                            ),
+                                                        )
+                                                    }
+                                                    className={
+                                                        currentPage ===
+                                                        totalPages
+                                                            ? 'pointer-events-none opacity-50'
+                                                            : 'cursor-pointer'
+                                                    }
                                                 />
                                             </PaginationItem>
                                         </PaginationContent>
@@ -575,49 +685,75 @@ export function DocumentGrid() {
                 </Suspense>
             </div>
 
-            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+            <AlertDialog
+                open={deleteDialogOpen}
+                onOpenChange={setDeleteDialogOpen}
+            >
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>Delete Document</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Are you sure you want to delete "{selectedDoc?.name}"? This action cannot be undone and the document
+                            Are you sure you want to delete "{selectedDoc?.name}
+                            "? This action cannot be undone and the document
                             will be permanently removed.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel disabled={isDeleting}>
+                            Cancel
+                        </AlertDialogCancel>
                         <AlertDialogAction
                             onClick={handleDeleteConfirm}
                             className='bg-red-600 text-white hover:bg-red-700'
                             disabled={isDeleting}
                         >
-                            {isDeleting ? <Spinner size='sm' className='mr-2' /> : null}
+                            {isDeleting ? (
+                                <Spinner size='sm' className='mr-2' />
+                            ) : null}
                             Delete
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
 
-            <AlertDialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+            <AlertDialog
+                open={shareDialogOpen}
+                onOpenChange={setShareDialogOpen}
+            >
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>Share Document</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Share "{selectedDoc?.name}" with others. Anyone with the link will be able to view this document.
+                            Share "{selectedDoc?.name}" with others. Anyone with
+                            the link will be able to view this document.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <div className='flex items-center space-x-2'>
                         <div className='grid flex-1 gap-2'>
                             <div className='flex items-center space-x-2'>
                                 <div className='bg-muted flex-1 overflow-hidden rounded-md border px-3 py-2 text-sm'>
-                                    <span className='truncate'>{selectedDoc?.publicUrl || ''}</span>
+                                    <span className='truncate'>
+                                        {selectedDoc?.publicUrl || ''}
+                                    </span>
                                 </div>
-                                <Button size='sm' className='px-3' onClick={copyShareLink}>
-                                    {copied ? <CheckCircle2 className='h-4 w-4' /> : <Copy className='h-4 w-4' />}
+                                <Button
+                                    size='sm'
+                                    className='px-3'
+                                    onClick={copyShareLink}
+                                >
+                                    {copied ? (
+                                        <CheckCircle2 className='h-4 w-4' />
+                                    ) : (
+                                        <Copy className='h-4 w-4' />
+                                    )}
                                     <span className='sr-only'>Copy</span>
                                 </Button>
                             </div>
-                            {copied && <p className='text-xs text-green-600'>Link copied to clipboard!</p>}
+                            {copied && (
+                                <p className='text-xs text-green-600'>
+                                    Link copied to clipboard!
+                                </p>
+                            )}
                         </div>
                     </div>
                     <AlertDialogFooter>
@@ -626,17 +762,24 @@ export function DocumentGrid() {
                 </AlertDialogContent>
             </AlertDialog>
 
-            <AlertDialog open={downloadDialogOpen} onOpenChange={setDownloadDialogOpen}>
+            <AlertDialog
+                open={downloadDialogOpen}
+                onOpenChange={setDownloadDialogOpen}
+            >
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>Download Document</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Are you sure you want to download "{selectedDoc?.name}"? The file will be saved to your device.
+                            Are you sure you want to download "
+                            {selectedDoc?.name}"? The file will be saved to your
+                            device.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDownloadConfirm}>Download</AlertDialogAction>
+                        <AlertDialogAction onClick={handleDownloadConfirm}>
+                            Download
+                        </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
