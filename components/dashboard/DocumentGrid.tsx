@@ -52,9 +52,8 @@ import UploadCard from '../documents/UploadCard';
 import { useAction } from 'next-safe-action/hooks';
 import { getUserFilesAction, deleteFileAction } from '@/actions/uploadActions';
 import { toast } from 'sonner';
-import { Spinner } from '@/components/ui/spinner'; // Import your Spinner component
+import { Spinner } from '@/components/ui/spinner';
 
-// Status variants pre styling
 const statusVariants = {
     processing:
         'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400',
@@ -133,7 +132,6 @@ export function DocumentGrid() {
                 toast.success(
                     result.data?.message || 'File deleted successfully',
                 );
-                // Re-fetch files after deletion
                 fetchFiles({});
             },
             onError: (error) => {
@@ -142,7 +140,6 @@ export function DocumentGrid() {
         },
     );
 
-    // Transformácia dát z API na formát pre komponent
     const transformFilesData = (files: FileFromAPI[]): Document[] => {
         return files.map((file, index) => ({
             id: file.id || `file-${index}`,
@@ -157,12 +154,10 @@ export function DocumentGrid() {
         }));
     };
 
-    // Načítanie súborov pri mount
     useEffect(() => {
         fetchFiles({});
     }, [fetchFiles]);
 
-    // Pomocná funkcia na získanie typu súboru z názvu
     function getFileType(filename: string): string {
         const extension = filename.split('.').pop()?.toLowerCase();
         switch (extension) {
@@ -179,7 +174,6 @@ export function DocumentGrid() {
         }
     }
 
-    // Formatovanie veľkosti súboru
     function formatFileSize(bytes: number): string {
         if (bytes === 0) return '0 B';
         const k = 1024;
@@ -188,7 +182,6 @@ export function DocumentGrid() {
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
-    // Formatovanie dátumu
     function formatDate(dateString: string): string {
         const date = new Date(dateString);
         return date.toLocaleDateString('en-US', {
@@ -198,7 +191,39 @@ export function DocumentGrid() {
         });
     }
 
-    // Sort documents based on selected option
+    const handleChatClick = (doc: Document, e: React.MouseEvent) => {
+        e.stopPropagation();
+        router.push(`/dashboard/chat/${doc.id}`);
+    };
+
+    const handleDocumentClick = (doc: Document) => {
+        router.push(`/dashboard/chat/${doc.id}`);
+    };
+
+    const handleQuickDownload = (doc: Document, e: React.MouseEvent) => {
+        e.stopPropagation();
+
+        const link = document.createElement('a');
+        link.href = doc.publicUrl;
+        link.download = doc.name;
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        toast.success(`Downloading ${doc.name}`);
+    };
+
+    const handleQuickShare = (doc: Document, e: React.MouseEvent) => {
+        e.stopPropagation();
+
+        navigator.clipboard.writeText(doc.publicUrl).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+            toast.success('Link copied to clipboard');
+        });
+    };
+
     const sortedDocuments = [...documents].sort((a, b) => {
         switch (sortBy) {
             case 'newest':
@@ -224,7 +249,6 @@ export function DocumentGrid() {
         }
     });
 
-    // Calculate pagination
     const totalPages = Math.ceil(sortedDocuments.length / ITEMS_PER_PAGE);
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     const currentDocuments = sortedDocuments.slice(
@@ -281,7 +305,6 @@ export function DocumentGrid() {
 
     const handleDownloadConfirm = () => {
         if (selectedDoc) {
-            // Priamy download cez public URL
             const link = document.createElement('a');
             link.href = selectedDoc.publicUrl;
             link.download = selectedDoc.name;
@@ -398,7 +421,6 @@ export function DocumentGrid() {
 
     return (
         <div className='min-h-screen'>
-            {/* Documents Grid */}
             <div>
                 <div className='mb-6 flex items-center justify-between'>
                     <div className='flex items-center gap-4'>
@@ -455,19 +477,13 @@ export function DocumentGrid() {
                     ) : (
                         <>
                             <div className='mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'>
-                                {/* Upload New Card */}
                                 <UploadCard />
 
-                                {/* Document Cards */}
                                 {currentDocuments.map((doc) => (
                                     <Card
                                         key={doc.id}
                                         className='group hover:border-primary/20 flex h-full min-h-[280px] cursor-pointer flex-col border-2 border-transparent transition-all duration-200 hover:shadow-lg'
-                                        onClick={() =>
-                                            router.push(
-                                                `/dashboard/documents/${doc.id}`,
-                                            )
-                                        }
+                                        onClick={() => handleDocumentClick(doc)}
                                     >
                                         <CardHeader className='flex-1 pb-3'>
                                             <div className='flex items-start justify-between'>
@@ -492,7 +508,7 @@ export function DocumentGrid() {
                                                     <DropdownMenuContent align='end'>
                                                         <DropdownMenuItem
                                                             onClick={(e) =>
-                                                                handleDownloadClick(
+                                                                handleQuickDownload(
                                                                     doc,
                                                                     e,
                                                                 )
@@ -503,14 +519,27 @@ export function DocumentGrid() {
                                                         </DropdownMenuItem>
                                                         <DropdownMenuItem
                                                             onClick={(e) =>
-                                                                handleShareClick(
+                                                                handleQuickShare(
                                                                     doc,
                                                                     e,
                                                                 )
                                                             }
                                                         >
                                                             <Copy className='mr-2 h-4 w-4' />
-                                                            Share
+                                                            {copied
+                                                                ? 'Copied!'
+                                                                : 'Share'}
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem
+                                                            onClick={(e) =>
+                                                                handleChatClick(
+                                                                    doc,
+                                                                    e,
+                                                                )
+                                                            }
+                                                        >
+                                                            <MessageSquare className='mr-2 h-4 w-4' />
+                                                            Chat with AI
                                                         </DropdownMenuItem>
                                                         <DropdownMenuItem
                                                             className='text-red-600 focus:text-red-600'
@@ -580,12 +609,9 @@ export function DocumentGrid() {
                                                 className='w-full gap-2'
                                                 variant='default'
                                                 size='sm'
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    router.push(
-                                                        `/dashboard/chat/${doc.id}`,
-                                                    );
-                                                }}
+                                                onClick={(e) =>
+                                                    handleChatClick(doc, e)
+                                                }
                                             >
                                                 <MessageSquare className='h-4 w-4' />
                                                 Chat with AI
@@ -595,7 +621,6 @@ export function DocumentGrid() {
                                 ))}
                             </div>
 
-                            {/* Empty State */}
                             {documents.length === 0 && (
                                 <div className='py-12 text-center'>
                                     <FileText className='text-muted-foreground mx-auto mb-4 h-16 w-16' />
@@ -609,7 +634,6 @@ export function DocumentGrid() {
                                 </div>
                             )}
 
-                            {/* Pagination */}
                             {totalPages > 1 && (
                                 <div className='flex justify-center'>
                                     <Pagination>
@@ -661,7 +685,6 @@ export function DocumentGrid() {
                 </Suspense>
             </div>
 
-            {/* Delete Confirmation Dialog */}
             <AlertDialog
                 open={deleteDialogOpen}
                 onOpenChange={setDeleteDialogOpen}
@@ -693,7 +716,6 @@ export function DocumentGrid() {
                 </AlertDialogContent>
             </AlertDialog>
 
-            {/* Share Dialog */}
             <AlertDialog
                 open={shareDialogOpen}
                 onOpenChange={setShareDialogOpen}
@@ -740,7 +762,6 @@ export function DocumentGrid() {
                 </AlertDialogContent>
             </AlertDialog>
 
-            {/* Download Confirmation Dialog */}
             <AlertDialog
                 open={downloadDialogOpen}
                 onOpenChange={setDownloadDialogOpen}
