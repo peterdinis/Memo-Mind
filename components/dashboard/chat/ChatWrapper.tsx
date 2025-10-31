@@ -12,8 +12,6 @@ import {
     ArrowLeft,
     Bot,
     User,
-    Upload,
-    X,
     File,
     Image,
     FileCode,
