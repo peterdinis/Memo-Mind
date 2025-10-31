@@ -9,7 +9,6 @@ import { Input } from '@/components/ui/input';
 import {
     FileText,
     Send,
-    Download,
     ArrowLeft,
     Bot,
     User,
