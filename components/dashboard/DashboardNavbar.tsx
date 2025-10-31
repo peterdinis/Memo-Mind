@@ -19,11 +19,12 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { usePathname, useRouter } from 'next/navigation';
-import { User, Settings, LogOut, CreditCard } from 'lucide-react';
+import { LogOut} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ModeToggle } from '../shared/ModeToggle';
-import { SearchDialog } from '../search/SearchDialog';
 import { useAuth } from '@/hooks/auth/useAuth';
+import type { SearchResult } from '@/schemas/searchSchemas';
+import { SearchDialog } from '../search/SearchDialog';
 
 export function DashboardNavbar() {
     const pathname = usePathname();
@@ -49,7 +50,6 @@ export function DashboardNavbar() {
 
     const breadcrumbItems = getBreadcrumbItems();
 
-    // Funkcia pre získanie iniciál z mena alebo emailu
     const getInitials = () => {
         if (profile?.full_name) {
             return profile.full_name
@@ -76,13 +76,29 @@ export function DashboardNavbar() {
         return 'User';
     };
 
-    // Funkcia pre získanie emailu
     const getDisplayEmail = () => {
         return user?.email || 'No email';
     };
 
     const handleLogout = async () => {
-        await signOut({});
+        signOut({});
+    };
+    
+    const handleDocumentSelect = (document: SearchResult) => {
+        window.open(document.publicUrl, '_blank');
+    };
+
+    const getCurrentFolder = () => {
+        if (pathname.includes('/documents')) {
+            return 'documents';
+        }
+        if (pathname.includes('/images')) {
+            return 'images';
+        }
+        if (pathname.includes('/archives')) {
+            return 'archives';
+        }
+        return 'documents'; // default
     };
 
     return (
@@ -121,8 +137,15 @@ export function DashboardNavbar() {
                     )}
                 </div>
 
-                {/* Profile dropdown */}
                 <div className='flex items-center gap-4'>
+                    <SearchDialog
+                        onSelect={handleDocumentSelect}
+                        placeholder="Hľadať dokumenty..."
+                        folder={getCurrentFolder()}
+                    />
+
+                    <ModeToggle />
+                    
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button
@@ -171,21 +194,6 @@ export function DashboardNavbar() {
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
-
-                    <ModeToggle />
-                    <SearchDialog
-                        onSearch={async (query) => {
-                            // Simulate API call
-                            const response = await fetch(
-                                `/api/search?q=${encodeURIComponent(query)}`,
-                            );
-                            const data = await response.json();
-                            return data.results;
-                        }}
-                        onSelect={(item) => {
-                            router.push(`/items/${item.id}`);
-                        }}
-                    />
                 </div>
             </div>
         </header>
