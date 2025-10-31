@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { usePathname, useRouter } from 'next/navigation';
-import { LogOut} from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ModeToggle } from '../shared/ModeToggle';
 import { useAuth } from '@/hooks/auth/useAuth';
@@ -83,7 +83,7 @@ export function DashboardNavbar() {
     const handleLogout = async () => {
         signOut({});
     };
-    
+
     const handleDocumentSelect = (document: SearchResult) => {
         window.open(document.publicUrl, '_blank');
     };
@@ -140,12 +140,12 @@ export function DashboardNavbar() {
                 <div className='flex items-center gap-4'>
                     <SearchDialog
                         onSelect={handleDocumentSelect}
-                        placeholder="Hľadať dokumenty..."
+                        placeholder='Hľadať dokumenty...'
                         folder={getCurrentFolder()}
                     />
 
                     <ModeToggle />
-                    
+
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button
@@ -154,9 +154,7 @@ export function DashboardNavbar() {
                             >
                                 <Avatar className='h-8 w-8'>
                                     <AvatarImage
-                                        src={
-                                            profile?.avatar_url
-                                        }
+                                        src={profile?.avatar_url}
                                         alt='Profile'
                                     />
                                     <AvatarFallback className='bg-primary text-primary-foreground'>
