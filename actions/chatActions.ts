@@ -6,30 +6,13 @@ import { createClient } from '@/supabase/server';
 import { OpenAI } from 'openai';
 import { PDFLoader } from '@langchain/community/document_loaders/fs/pdf';
 import { DocxLoader } from '@langchain/community/document_loaders/fs/docx';
+import { TextLoader } from '@langchain/community/document_loaders/fs/text';
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
-import { MemoryVectorStore } from '@langchain/classic/vectorstores/memory';
 import { OpenAIEmbeddings } from '@langchain/openai';
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
-
-// Schemas
-export const chatWithDocumentSchema = z.object({
-    documentId: z.string(),
-    message: z.string().min(1, 'Message is required'),
-    chatHistory: z
-        .array(
-            z.object({
-                role: z.enum(['user', 'assistant']),
-                content: z.string(),
-            }),
-        )
-        .optional()
-        .default([]),
-});
-
-export const processDocumentSchema = z.object({
-    documentId: z.string(),
-});
+import { Pinecone } from '@pinecone-database/pinecone';
+import { processDocumentSchema, chatWithDocumentSchema } from '@/schemas/chatSchemas';
 
 // Types
 export type ChatMessage = {
@@ -42,8 +25,18 @@ const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY!,
 });
 
-// Cache for document processing
-const documentCache = new Map();
+// Initialize Pinecone
+const pinecone = new Pinecone({
+    apiKey: process.env.PINECONE_API_KEY!,
+});
+
+// Get Pinecone index
+const getPineconeIndex = () => {
+    return pinecone.index(process.env.PINECONE_INDEX_NAME || 'documents');
+};
+
+// Cache for document metadata (not the vectors)
+const documentMetadataCache = new Map();
 
 export const processDocumentAction = authenticatedAction
     .inputSchema(processDocumentSchema)
@@ -59,19 +52,27 @@ export const processDocumentAction = authenticatedAction
             throw new Error('User not authenticated');
         }
 
-        // Check if document is already processed
-        if (documentCache.has(documentId)) {
+        // Check if document is already processed in Supabase
+        const { data: existingDoc, error: docError } = await supabase
+            .from('processed_documents')
+            .select('*')
+            .eq('id', documentId)
+            .eq('user_id', user.id)
+            .single();
+
+        if (existingDoc && existingDoc.status === 'processed') {
             return {
                 success: true,
                 message: 'Document already processed',
                 documentId,
+                chunksCount: existingDoc.chunks_count,
             };
         }
 
         // Get document from Supabase Storage
         const { data: files, error } = await supabase.storage
             .from('documents')
-            .list(`${user.id}/documents`);
+            .list(`${user.id}`);
 
         if (error) {
             throw new Error(`Failed to list files: ${error.message}`);
@@ -85,7 +86,7 @@ export const processDocumentAction = authenticatedAction
         // Download document
         const { data: fileData, error: downloadError } = await supabase.storage
             .from('documents')
-            .download(`${user.id}/documents/${document.name}`);
+            .download(`${user.id}/${document.name}`);
 
         if (downloadError) {
             throw new Error(
@@ -94,6 +95,18 @@ export const processDocumentAction = authenticatedAction
         }
 
         try {
+            // Update document status to processing
+            await supabase
+                .from('processed_documents')
+                .upsert({
+                    id: documentId,
+                    user_id: user.id,
+                    name: document.name,
+                    status: 'processing',
+                    chunks_count: 0,
+                    processed_at: new Date().toISOString(),
+                });
+
             // Convert Blob to Buffer for file processing
             const arrayBuffer = await fileData.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
@@ -107,7 +120,7 @@ export const processDocumentAction = authenticatedAction
                 const docs = await loader.load();
                 textContent = docs.map((doc) => doc.pageContent).join('\n\n');
             } else if (fileExtension === 'txt') {
-                const loader = new DocxLoader(new Blob([buffer]));
+                const loader = new TextLoader(new Blob([buffer]));
                 const docs = await loader.load();
                 textContent = docs.map((doc) => doc.pageContent).join('\n\n');
             } else if (['doc', 'docx'].includes(fileExtension!)) {
@@ -127,28 +140,61 @@ export const processDocumentAction = authenticatedAction
 
             const chunks = await textSplitter.splitText(textContent);
 
-            // Create embeddings and vector store
+            // Create embeddings
             const embeddings = new OpenAIEmbeddings({
                 openAIApiKey: process.env.OPENAI_API_KEY!,
             });
 
-            const vectorStore = await MemoryVectorStore.fromTexts(
-                chunks,
-                { documentId, documentName: document.name },
-                embeddings,
-            );
+            const embeddingsArray = await embeddings.embedDocuments(chunks);
 
-            // Cache the processed document
-            documentCache.set(documentId, {
-                vectorStore,
-                textContent,
+            // Store vectors in Pinecone
+            const pineconeIndex = getPineconeIndex();
+            
+            const vectors = chunks.map((chunk, index) => ({
+                id: `${documentId}_${index}`,
+                values: embeddingsArray[index],
                 metadata: {
-                    name: document.name,
-                    size: document.metadata?.size,
-                    type: fileExtension,
-                    processedAt: new Date().toISOString(),
+                    documentId,
+                    userId: user.id,
+                    chunkIndex: index,
+                    documentName: document.name,
+                    contentType: fileExtension,
+                    text: chunk.substring(0, 500), // Store first 500 chars for context
                 },
+            }));
+
+            // Upsert vectors to Pinecone in batches
+            const batchSize = 100;
+            for (let i = 0; i < vectors.length; i += batchSize) {
+                const batch = vectors.slice(i, i + batchSize);
+                await pineconeIndex.upsert(batch);
+            }
+
+            // Cache document metadata
+            documentMetadataCache.set(documentId, {
+                name: document.name,
+                type: fileExtension,
+                size: document.metadata?.size,
+                processedAt: new Date().toISOString(),
+                chunksCount: chunks.length,
             });
+
+            // Update document status in Supabase
+            await supabase
+                .from('processed_documents')
+                .update({
+                    status: 'processed',
+                    chunks_count: chunks.length,
+                    processed_at: new Date().toISOString(),
+                    metadata: {
+                        name: document.name,
+                        type: fileExtension,
+                        size: document.metadata?.size,
+                        chunks: chunks.length,
+                    },
+                })
+                .eq('id', documentId)
+                .eq('user_id', user.id);
 
             return {
                 success: true,
@@ -157,6 +203,16 @@ export const processDocumentAction = authenticatedAction
                 chunksCount: chunks.length,
             };
         } catch (error) {
+            // Update document status to failed
+            await supabase
+                .from('processed_documents')
+                .update({
+                    status: 'failed',
+                    error_message: error instanceof Error ? error.message : 'Unknown error',
+                })
+                .eq('id', documentId)
+                .eq('user_id', user.id);
+
             console.error('Document processing error:', error);
             throw new Error(
                 `Failed to process document: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -178,37 +234,60 @@ export const chatWithDocumentAction = authenticatedAction
             throw new Error('User not authenticated');
         }
 
-        // Check if document is processed
-        if (!documentCache.has(documentId)) {
+        // Check if document is processed in Supabase
+        const { data: documentData, error: docError } = await supabase
+            .from('processed_documents')
+            .select('*')
+            .eq('id', documentId)
+            .eq('user_id', user.id)
+            .eq('status', 'processed')
+            .single();
+
+        if (!documentData) {
             throw new Error(
                 'Document not processed. Please process the document first.',
             );
         }
 
-        const documentData = documentCache.get(documentId);
-        const { vectorStore, textContent, metadata } = documentData;
-
         try {
-            // Initialize chat model
+            // Initialize embeddings and chat model
+            const embeddings = new OpenAIEmbeddings({
+                openAIApiKey: process.env.OPENAI_API_KEY!,
+            });
+
             const chatModel = new ChatOpenAI({
                 openAIApiKey: process.env.OPENAI_API_KEY!,
                 modelName: 'gpt-3.5-turbo',
                 temperature: 0.7,
             });
 
-            // Perform similarity search on the document
-            const relevantDocs = await vectorStore.similaritySearch(message, 4);
+            // Create query embedding
+            const queryEmbedding = await embeddings.embedQuery(message);
+
+            // Search in Pinecone
+            const pineconeIndex = getPineconeIndex();
+            const searchResults = await pineconeIndex.query({
+                vector: queryEmbedding,
+                filter: {
+                    documentId: { $eq: documentId },
+                    userId: { $eq: user.id },
+                },
+                topK: 4,
+                includeMetadata: true,
+            });
+
+            const relevantDocs = searchResults.matches || [];
             const context = relevantDocs
-                .map((doc: { pageContent: string }) => doc.pageContent)
+                .map((match) => match.metadata?.text || '')
                 .join('\n\n');
 
             // Prepare system prompt
             const systemPrompt = `You are an AI assistant helping a user analyze their document.
             
 Document Information:
-- Name: ${metadata.name}
-- Type: ${metadata.type}
-- Size: ${metadata.size}
+- Name: ${documentData.name}
+- Type: ${documentData.metadata?.type}
+- Size: ${documentData.metadata?.size}
 
 Context from the document:
 ${context}
@@ -228,13 +307,31 @@ User's question: ${message}
 
 Please provide a helpful response based on the document:`;
 
-            // Generate response using the invoke method (FIXED: replaced call with invoke)
+            // Generate response
             const response = await chatModel.invoke([
                 new SystemMessage(systemPrompt),
                 new HumanMessage(message),
             ]);
 
             const aiResponse = response.content.toString();
+
+            // Save chat history to Supabase
+            const { error: chatError } = await supabase
+                .from('document_chats')
+                .insert({
+                    document_id: documentId,
+                    user_id: user.id,
+                    user_message: message,
+                    assistant_response: aiResponse,
+                    metadata: {
+                        relevant_chunks: relevantDocs.length,
+                        model: 'gpt-3.5-turbo',
+                    },
+                });
+
+            if (chatError) {
+                console.error('Failed to save chat history:', chatError);
+            }
 
             // Update chat history
             const updatedChatHistory = [
@@ -253,14 +350,14 @@ Please provide a helpful response based on the document:`;
         } catch (error) {
             console.error('Chat error:', error);
 
-            // Fallback to simple OpenAI response if LangChain fails
+            // Fallback to simple OpenAI response
             try {
                 const fallbackResponse = await openai.chat.completions.create({
                     model: 'gpt-3.5-turbo',
                     messages: [
                         {
                             role: 'system',
-                            content: `You are helping analyze a document called "${metadata.name}". The user asked: "${message}". Provide a helpful response.`,
+                            content: `You are helping analyze a document called "${documentData.name}". The user asked: "${message}". Provide a helpful response.`,
                         },
                         {
                             role: 'user',
@@ -293,20 +390,85 @@ Please provide a helpful response based on the document:`;
         }
     });
 
-// Action to clear document cache
-export const clearDocumentCacheAction = authenticatedAction
-    .inputSchema(z.object({ documentId: z.string().optional() }))
-    .action(async ({ parsedInput: { documentId } }) => {
-        if (documentId) {
-            documentCache.delete(documentId);
-        } else {
-            documentCache.clear();
+// Action to get user's processed documents
+export const getProcessedDocumentsAction = authenticatedAction
+    .action(async () => {
+        const supabase = await createClient();
+
+        const {
+            data: { user },
+            error: userError,
+        } = await supabase.auth.getUser();
+
+        if (userError || !user) {
+            throw new Error('User not authenticated');
+        }
+
+        const { data: documents, error } = await supabase
+            .from('processed_documents')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('processed_at', { ascending: false });
+
+        if (error) {
+            throw new Error(`Failed to fetch documents: ${error.message}`);
         }
 
         return {
             success: true,
-            message: documentId
-                ? 'Document cache cleared'
-                : 'All document caches cleared',
+            documents: documents || [],
         };
+    });
+
+// Action to clear document data
+export const clearDocumentDataAction = authenticatedAction
+    .inputSchema(z.object({ documentId: z.string() }))
+    .action(async ({ parsedInput: { documentId } }) => {
+        const supabase = await createClient();
+
+        const {
+            data: { user },
+            error: userError,
+        } = await supabase.auth.getUser();
+
+        if (userError || !user) {
+            throw new Error('User not authenticated');
+        }
+
+        try {
+            // Delete vectors from Pinecone
+            const pineconeIndex = getPineconeIndex();
+            await pineconeIndex.deleteMany({
+                filter: {
+                    documentId: { $eq: documentId },
+                    userId: { $eq: user.id },
+                },
+            });
+
+            // Delete from Supabase
+            await supabase
+                .from('processed_documents')
+                .delete()
+                .eq('id', documentId)
+                .eq('user_id', user.id);
+
+            // Clear chat history
+            await supabase
+                .from('document_chats')
+                .delete()
+                .eq('document_id', documentId)
+                .eq('user_id', user.id);
+
+            // Clear cache
+            documentMetadataCache.delete(documentId);
+
+            return {
+                success: true,
+                message: 'Document data cleared successfully',
+            };
+        } catch (error) {
+            throw new Error(
+                `Failed to clear document data: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            );
+        }
     });
