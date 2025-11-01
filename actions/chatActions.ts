@@ -4,25 +4,27 @@ import { authenticatedAction } from '@/lib/next-safe-action';
 import { z } from 'zod';
 import { createClient } from '@/supabase/server';
 import { OpenAI } from 'openai';
-
-// Správne LangChain importy
-import { PDFLoader } from "langchain/document_loaders/fs/pdf";
-import { TextLoader } from "langchain/document_loaders/fs/text";
-import { DocxLoader } from "langchain/document_loaders/fs/docx";
-import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
-import { MemoryVectorStore } from "langchain/vectorstores/memory";
-import { OpenAIEmbeddings } from "langchain/embeddings/openai";
-import { ChatOpenAI } from "langchain/chat_models/openai";
-import { HumanMessage, SystemMessage } from "langchain/schema";
+import { PDFLoader } from '@langchain/community/document_loaders/fs/pdf';
+import { DocxLoader } from '@langchain/community/document_loaders/fs/docx';
+import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
+import { MemoryVectorStore } from '@langchain/classic/vectorstores/memory';
+import { OpenAIEmbeddings } from '@langchain/openai';
+import { ChatOpenAI } from '@langchain/openai';
+import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 
 // Schemas
 export const chatWithDocumentSchema = z.object({
     documentId: z.string(),
     message: z.string().min(1, 'Message is required'),
-    chatHistory: z.array(z.object({
-        role: z.enum(['user', 'assistant']),
-        content: z.string(),
-    })).optional().default([]),
+    chatHistory: z
+        .array(
+            z.object({
+                role: z.enum(['user', 'assistant']),
+                content: z.string(),
+            }),
+        )
+        .optional()
+        .default([]),
 });
 
 export const processDocumentSchema = z.object({
@@ -59,10 +61,10 @@ export const processDocumentAction = authenticatedAction
 
         // Check if document is already processed
         if (documentCache.has(documentId)) {
-            return { 
-                success: true, 
+            return {
+                success: true,
                 message: 'Document already processed',
-                documentId 
+                documentId,
             };
         }
 
@@ -75,7 +77,7 @@ export const processDocumentAction = authenticatedAction
             throw new Error(`Failed to list files: ${error.message}`);
         }
 
-        const document = files?.find(file => file.id === documentId);
+        const document = files?.find((file) => file.id === documentId);
         if (!document) {
             throw new Error('Document not found');
         }
@@ -86,7 +88,9 @@ export const processDocumentAction = authenticatedAction
             .download(`${user.id}/documents/${document.name}`);
 
         if (downloadError) {
-            throw new Error(`Failed to download document: ${downloadError.message}`);
+            throw new Error(
+                `Failed to download document: ${downloadError.message}`,
+            );
         }
 
         try {
@@ -101,15 +105,15 @@ export const processDocumentAction = authenticatedAction
             if (fileExtension === 'pdf') {
                 const loader = new PDFLoader(new Blob([buffer]));
                 const docs = await loader.load();
-                textContent = docs.map(doc => doc.pageContent).join('\n\n');
+                textContent = docs.map((doc) => doc.pageContent).join('\n\n');
             } else if (fileExtension === 'txt') {
-                const loader = new TextLoader(new Blob([buffer]));
+                const loader = new DocxLoader(new Blob([buffer]));
                 const docs = await loader.load();
-                textContent = docs.map(doc => doc.pageContent).join('\n\n');
+                textContent = docs.map((doc) => doc.pageContent).join('\n\n');
             } else if (['doc', 'docx'].includes(fileExtension!)) {
                 const loader = new DocxLoader(new Blob([buffer]));
                 const docs = await loader.load();
-                textContent = docs.map(doc => doc.pageContent).join('\n\n');
+                textContent = docs.map((doc) => doc.pageContent).join('\n\n');
             } else {
                 // For other file types, use simple text extraction
                 textContent = `Document: ${document.name}\nType: ${fileExtension}\nSize: ${document.metadata?.size} bytes\n\nThis document type is not fully supported for text extraction.`;
@@ -131,7 +135,7 @@ export const processDocumentAction = authenticatedAction
             const vectorStore = await MemoryVectorStore.fromTexts(
                 chunks,
                 { documentId, documentName: document.name },
-                embeddings
+                embeddings,
             );
 
             // Cache the processed document
@@ -143,7 +147,7 @@ export const processDocumentAction = authenticatedAction
                     size: document.metadata?.size,
                     type: fileExtension,
                     processedAt: new Date().toISOString(),
-                }
+                },
             });
 
             return {
@@ -152,10 +156,11 @@ export const processDocumentAction = authenticatedAction
                 documentId,
                 chunksCount: chunks.length,
             };
-
         } catch (error) {
             console.error('Document processing error:', error);
-            throw new Error(`Failed to process document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            throw new Error(
+                `Failed to process document: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            );
         }
     });
 
@@ -175,7 +180,9 @@ export const chatWithDocumentAction = authenticatedAction
 
         // Check if document is processed
         if (!documentCache.has(documentId)) {
-            throw new Error('Document not processed. Please process the document first.');
+            throw new Error(
+                'Document not processed. Please process the document first.',
+            );
         }
 
         const documentData = documentCache.get(documentId);
@@ -191,7 +198,9 @@ export const chatWithDocumentAction = authenticatedAction
 
             // Perform similarity search on the document
             const relevantDocs = await vectorStore.similaritySearch(message, 4);
-            const context = relevantDocs.map(doc => doc.pageContent).join('\n\n');
+            const context = relevantDocs
+                .map((doc: { pageContent: string }) => doc.pageContent)
+                .join('\n\n');
 
             // Prepare system prompt
             const systemPrompt = `You are an AI assistant helping a user analyze their document.
@@ -213,14 +222,14 @@ Instructions:
 6. Always maintain a professional and helpful tone
 
 Current conversation history:
-${chatHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n')}
+${chatHistory.map((msg) => `${msg.role}: ${msg.content}`).join('\n')}
 
 User's question: ${message}
 
 Please provide a helpful response based on the document:`;
 
-            // Generate response using the call method
-            const response = await chatModel.call([
+            // Generate response using the invoke method (FIXED: replaced call with invoke)
+            const response = await chatModel.invoke([
                 new SystemMessage(systemPrompt),
                 new HumanMessage(message),
             ]);
@@ -231,7 +240,7 @@ Please provide a helpful response based on the document:`;
             const updatedChatHistory = [
                 ...chatHistory,
                 { role: 'user' as const, content: message },
-                { role: 'assistant' as const, content: aiResponse }
+                { role: 'assistant' as const, content: aiResponse },
             ];
 
             return {
@@ -241,10 +250,9 @@ Please provide a helpful response based on the document:`;
                 relevantChunks: relevantDocs.length,
                 documentContext: context.substring(0, 500) + '...',
             };
-
         } catch (error) {
             console.error('Chat error:', error);
-            
+
             // Fallback to simple OpenAI response if LangChain fails
             try {
                 const fallbackResponse = await openai.chat.completions.create({
@@ -252,17 +260,19 @@ Please provide a helpful response based on the document:`;
                     messages: [
                         {
                             role: 'system',
-                            content: `You are helping analyze a document called "${metadata.name}". The user asked: "${message}". Provide a helpful response.`
+                            content: `You are helping analyze a document called "${metadata.name}". The user asked: "${message}". Provide a helpful response.`,
                         },
                         {
                             role: 'user',
-                            content: message
-                        }
+                            content: message,
+                        },
                     ],
                     max_tokens: 500,
                 });
 
-                const fallbackMessage = fallbackResponse.choices[0]?.message?.content || 'I apologize, but I encountered an error processing your request.';
+                const fallbackMessage =
+                    fallbackResponse.choices[0]?.message?.content ||
+                    'I apologize, but I encountered an error processing your request.';
 
                 return {
                     success: true,
@@ -270,14 +280,15 @@ Please provide a helpful response based on the document:`;
                     chatHistory: [
                         ...chatHistory,
                         { role: 'user', content: message },
-                        { role: 'assistant', content: fallbackMessage }
+                        { role: 'assistant', content: fallbackMessage },
                     ],
                     relevantChunks: 0,
                     isFallback: true,
                 };
-
             } catch (fallbackError) {
-                throw new Error(`Failed to generate response: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                throw new Error(
+                    `Failed to generate response: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                );
             }
         }
     });
@@ -294,6 +305,8 @@ export const clearDocumentCacheAction = authenticatedAction
 
         return {
             success: true,
-            message: documentId ? 'Document cache cleared' : 'All document caches cleared',
+            message: documentId
+                ? 'Document cache cleared'
+                : 'All document caches cleared',
         };
     });
