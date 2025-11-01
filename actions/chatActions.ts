@@ -3,7 +3,6 @@
 import { authenticatedAction } from '@/lib/next-safe-action';
 import { z } from 'zod';
 import { createClient } from '@/supabase/server';
-import { OpenAI } from 'openai';
 import { PDFLoader } from '@langchain/community/document_loaders/fs/pdf';
 import { DocxLoader } from '@langchain/community/document_loaders/fs/docx';
 import { TextLoader } from '@langchain/community/document_loaders/fs/text';
@@ -13,22 +12,13 @@ import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { Pinecone } from '@pinecone-database/pinecone';
 import { processDocumentSchema, chatWithDocumentSchema } from '@/schemas/chatSchemas';
+import { pinecone } from '@/lib/pinecone';
 
 // Types
 export type ChatMessage = {
     role: 'user' | 'assistant';
     content: string;
 };
-
-// Initialize OpenAI
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY!,
-});
-
-// Initialize Pinecone
-const pinecone = new Pinecone({
-    apiKey: process.env.PINECONE_API_KEY!,
-});
 
 // Get Pinecone index
 const getPineconeIndex = () => {
