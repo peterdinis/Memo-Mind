@@ -10,17 +10,14 @@ import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { OpenAIEmbeddings } from '@langchain/openai';
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
-import { Pinecone } from '@pinecone-database/pinecone';
 import { processDocumentSchema, chatWithDocumentSchema } from '@/schemas/chatSchemas';
 import { pinecone } from '@/lib/pinecone';
 
-// Types
 export type ChatMessage = {
     role: 'user' | 'assistant';
     content: string;
 };
 
-// Get Pinecone index
 const getPineconeIndex = () => {
     return pinecone.index(process.env.PINECONE_INDEX_NAME || 'documents');
 };
