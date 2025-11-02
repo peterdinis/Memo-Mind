@@ -12,18 +12,66 @@ import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { processDocumentSchema, chatWithDocumentSchema } from '@/schemas/chatSchemas';
 import { pinecone } from '@/lib/pinecone';
+import OpenAI from 'openai';
+
+// Inicializácia OpenAI pre fallback
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY!,
+});
 
 export type ChatMessage = {
     role: 'user' | 'assistant';
     content: string;
 };
 
+// Typy pre metadata
+interface DocumentMetadata {
+  name: string;
+  type?: string;
+  chunks?: number;
+}
+
+interface ChatMetadata {
+  relevant_chunks: number;
+  model: string;
+  is_fallback?: boolean;
+}
+
+interface PineconeMetadata {
+  documentId: string;
+  userId: string;
+  chunkIndex: number;
+  documentName: string;
+  contentType?: string;
+  text: string;
+}
+
+// Pinecone types
+interface PineconeVector {
+  id: string;
+  values: number[];
+  metadata: PineconeMetadata;
+}
+
+interface PineconeQueryResult {
+  id: string;
+  score: number;
+  values?: number[];
+  metadata?: PineconeMetadata;
+}
+
+interface PineconeQueryResponse {
+  matches?: PineconeQueryResult[];
+  namespace?: string;
+}
+
 const getPineconeIndex = () => {
-    return pinecone.index(process.env.PINECONE_INDEX_NAME || 'documents');
+    const indexName = process.env.PINECONE_INDEX_NAME || 'documents';
+    return pinecone.Index(indexName);
 };
 
 // Cache for document metadata (not the vectors)
-const documentMetadataCache = new Map();
+const documentMetadataCache = new Map<string, DocumentMetadata & { processedAt: string; chunksCount: number }>();
 
 export const processDocumentAction = authenticatedAction
     .inputSchema(processDocumentSchema)
@@ -47,6 +95,10 @@ export const processDocumentAction = authenticatedAction
             .eq('user_id', user.id)
             .single();
 
+        if (docError && docError.code !== 'PGRST116') {
+            throw new Error(`Database error: ${docError.message}`);
+        }
+
         if (existingDoc && existingDoc.status === 'processed') {
             return {
                 success: true,
@@ -56,28 +108,28 @@ export const processDocumentAction = authenticatedAction
             };
         }
 
-        // Get document from Supabase Storage
-        const { data: files, error } = await supabase.storage
-            .from('documents')
-            .list(`${user.id}`);
+        // Get document record to get the filename
+        const { data: documentRecord, error: recordError } = await supabase
+            .from('processed_documents')
+            .select('name')
+            .eq('id', documentId)
+            .eq('user_id', user.id)
+            .single();
 
-        if (error) {
-            throw new Error(`Failed to list files: ${error.message}`);
+        if (!documentRecord || recordError) {
+            throw new Error('Document record not found');
         }
 
-        const document = files?.find((file) => file.id === documentId);
-        if (!document) {
-            throw new Error('Document not found');
-        }
+        const documentName = documentRecord.name;
 
         // Download document
         const { data: fileData, error: downloadError } = await supabase.storage
             .from('documents')
-            .download(`${user.id}/${document.name}`);
+            .download(`${user.id}/${documentName}`);
 
-        if (downloadError) {
+        if (downloadError || !fileData) {
             throw new Error(
-                `Failed to download document: ${downloadError.message}`,
+                `Failed to download document: ${downloadError?.message || 'File not found'}`,
             );
         }
 
@@ -88,7 +140,7 @@ export const processDocumentAction = authenticatedAction
                 .upsert({
                     id: documentId,
                     user_id: user.id,
-                    name: document.name,
+                    name: documentName,
                     status: 'processing',
                     chunks_count: 0,
                     processed_at: new Date().toISOString(),
@@ -100,7 +152,7 @@ export const processDocumentAction = authenticatedAction
 
             // Process document based on type
             let textContent = '';
-            const fileExtension = document.name.split('.').pop()?.toLowerCase();
+            const fileExtension = documentName.split('.').pop()?.toLowerCase();
 
             if (fileExtension === 'pdf') {
                 const loader = new PDFLoader(new Blob([buffer]));
@@ -110,13 +162,13 @@ export const processDocumentAction = authenticatedAction
                 const loader = new TextLoader(new Blob([buffer]));
                 const docs = await loader.load();
                 textContent = docs.map((doc) => doc.pageContent).join('\n\n');
-            } else if (['doc', 'docx'].includes(fileExtension!)) {
+            } else if (fileExtension === 'docx' || fileExtension === 'doc') {
                 const loader = new DocxLoader(new Blob([buffer]));
                 const docs = await loader.load();
                 textContent = docs.map((doc) => doc.pageContent).join('\n\n');
             } else {
                 // For other file types, use simple text extraction
-                textContent = `Document: ${document.name}\nType: ${fileExtension}\nSize: ${document.metadata?.size} bytes\n\nThis document type is not fully supported for text extraction.`;
+                textContent = `Document: ${documentName}\nType: ${fileExtension}\n\nThis document type is not fully supported for text extraction.`;
             }
 
             // Split text into chunks
@@ -137,14 +189,14 @@ export const processDocumentAction = authenticatedAction
             // Store vectors in Pinecone
             const pineconeIndex = getPineconeIndex();
             
-            const vectors = chunks.map((chunk, index) => ({
+            const vectors: PineconeVector[] = chunks.map((chunk, index) => ({
                 id: `${documentId}_${index}`,
                 values: embeddingsArray[index],
                 metadata: {
                     documentId,
                     userId: user.id,
                     chunkIndex: index,
-                    documentName: document.name,
+                    documentName: documentName,
                     contentType: fileExtension,
                     text: chunk.substring(0, 500), // Store first 500 chars for context
                 },
@@ -159,26 +211,26 @@ export const processDocumentAction = authenticatedAction
 
             // Cache document metadata
             documentMetadataCache.set(documentId, {
-                name: document.name,
+                name: documentName,
                 type: fileExtension,
-                size: document.metadata?.size,
                 processedAt: new Date().toISOString(),
                 chunksCount: chunks.length,
             });
 
             // Update document status in Supabase
+            const metadata: DocumentMetadata = {
+                name: documentName,
+                type: fileExtension,
+                chunks: chunks.length,
+            };
+
             await supabase
                 .from('processed_documents')
                 .update({
                     status: 'processed',
                     chunks_count: chunks.length,
                     processed_at: new Date().toISOString(),
-                    metadata: {
-                        name: document.name,
-                        type: fileExtension,
-                        size: document.metadata?.size,
-                        chunks: chunks.length,
-                    },
+                    metadata: metadata,
                 })
                 .eq('id', documentId)
                 .eq('user_id', user.id);
@@ -261,20 +313,22 @@ export const chatWithDocumentAction = authenticatedAction
                 },
                 topK: 4,
                 includeMetadata: true,
-            });
+            }) as PineconeQueryResponse;
 
             const relevantDocs = searchResults.matches || [];
             const context = relevantDocs
-                .map((match) => match.metadata?.text || '')
+                .map((match) => (match.metadata as PineconeMetadata)?.text || '')
                 .join('\n\n');
+
+            // Get document metadata safely
+            const documentMetadata = documentData.metadata as DocumentMetadata | null;
 
             // Prepare system prompt
             const systemPrompt = `You are an AI assistant helping a user analyze their document.
             
 Document Information:
 - Name: ${documentData.name}
-- Type: ${documentData.metadata?.type}
-- Size: ${documentData.metadata?.size}
+- Type: ${documentMetadata?.type || 'unknown'}
 
 Context from the document:
 ${context}
@@ -300,9 +354,16 @@ Please provide a helpful response based on the document:`;
                 new HumanMessage(message),
             ]);
 
-            const aiResponse = response.content.toString();
+            const aiResponse = typeof response.content === 'string' 
+                ? response.content 
+                : String(response.content);
 
             // Save chat history to Supabase
+            const chatMetadata: ChatMetadata = {
+                relevant_chunks: relevantDocs.length,
+                model: 'gpt-3.5-turbo',
+            };
+
             const { error: chatError } = await supabase
                 .from('document_chats')
                 .insert({
@@ -310,10 +371,7 @@ Please provide a helpful response based on the document:`;
                     user_id: user.id,
                     user_message: message,
                     assistant_response: aiResponse,
-                    metadata: {
-                        relevant_chunks: relevantDocs.length,
-                        model: 'gpt-3.5-turbo',
-                    },
+                    metadata: chatMetadata,
                 });
 
             if (chatError) {
@@ -321,10 +379,10 @@ Please provide a helpful response based on the document:`;
             }
 
             // Update chat history
-            const updatedChatHistory = [
+            const updatedChatHistory: ChatMessage[] = [
                 ...chatHistory,
-                { role: 'user' as const, content: message },
-                { role: 'assistant' as const, content: aiResponse },
+                { role: 'user', content: message },
+                { role: 'assistant', content: aiResponse },
             ];
 
             return {
@@ -358,18 +416,21 @@ Please provide a helpful response based on the document:`;
                     fallbackResponse.choices[0]?.message?.content ||
                     'I apologize, but I encountered an error processing your request.';
 
+                const fallbackChatHistory: ChatMessage[] = [
+                    ...chatHistory,
+                    { role: 'user', content: message },
+                    { role: 'assistant', content: fallbackMessage },
+                ];
+
                 return {
                     success: true,
                     response: fallbackMessage,
-                    chatHistory: [
-                        ...chatHistory,
-                        { role: 'user', content: message },
-                        { role: 'assistant', content: fallbackMessage },
-                    ],
+                    chatHistory: fallbackChatHistory,
                     relevantChunks: 0,
                     isFallback: true,
                 };
             } catch (fallbackError) {
+                console.error('Fallback error:', fallbackError);
                 throw new Error(
                     `Failed to generate response: ${error instanceof Error ? error.message : 'Unknown error'}`,
                 );
@@ -404,6 +465,47 @@ export const getProcessedDocumentsAction = authenticatedAction
         return {
             success: true,
             documents: documents || [],
+        };
+    });
+
+// Action to get chat history for a document
+export const getDocumentChatHistoryAction = authenticatedAction
+    .inputSchema(z.object({ documentId: z.string() }))
+    .action(async ({ parsedInput: { documentId } }) => {
+        const supabase = await createClient();
+
+        const {
+            data: { user },
+            error: userError,
+        } = await supabase.auth.getUser();
+
+        if (userError || !user) {
+            throw new Error('User not authenticated');
+        }
+
+        const { data: chats, error } = await supabase
+            .from('document_chats')
+            .select('*')
+            .eq('document_id', documentId)
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: true });
+
+        if (error) {
+            throw new Error(`Failed to fetch chat history: ${error.message}`);
+        }
+
+        // Convert to ChatMessage format
+        const chatHistory: ChatMessage[] = [];
+        chats?.forEach(chat => {
+            chatHistory.push(
+                { role: 'user', content: chat.user_message },
+                { role: 'assistant', content: chat.assistant_response }
+            );
+        });
+
+        return {
+            success: true,
+            chatHistory,
         };
     });
 
@@ -458,4 +560,36 @@ export const clearDocumentDataAction = authenticatedAction
                 `Failed to clear document data: ${error instanceof Error ? error.message : 'Unknown error'}`,
             );
         }
+    });
+
+// Action to get document processing status
+export const getDocumentStatusAction = authenticatedAction
+    .inputSchema(z.object({ documentId: z.string() }))
+    .action(async ({ parsedInput: { documentId } }) => {
+        const supabase = await createClient();
+
+        const {
+            data: { user },
+            error: userError,
+        } = await supabase.auth.getUser();
+
+        if (userError || !user) {
+            throw new Error('User not authenticated');
+        }
+
+        const { data: document, error } = await supabase
+            .from('processed_documents')
+            .select('*')
+            .eq('id', documentId)
+            .eq('user_id', user.id)
+            .single();
+
+        if (error) {
+            throw new Error(`Failed to fetch document status: ${error.message}`);
+        }
+
+        return {
+            success: true,
+            document,
+        };
     });
