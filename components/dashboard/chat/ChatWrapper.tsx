@@ -64,9 +64,36 @@ interface DocumentChatProps {
     documentId?: string;
 }
 
+// Helper funkcie pre type-safe prístup k dátam
+function isSuccessResult(result: unknown): result is { data: { files: unknown[] } } {
+    return (
+        typeof result === 'object' && 
+        result !== null && 
+        'data' in result && 
+        typeof (result as any).data === 'object' &&
+        (result as any).data !== null &&
+        'files' in (result as any).data &&
+        Array.isArray((result as any).data.files)
+    );
+}
+
+function getErrorMessage(error: unknown): string {
+    if (typeof error === 'string') return error;
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'object' && error !== null) {
+        if ('message' in error && typeof (error as any).message === 'string') {
+            return (error as any).message;
+        }
+        if ('error' in error && typeof (error as any).error === 'string') {
+            return (error as any).error;
+        }
+    }
+    return 'Unknown error occurred';
+}
+
 export function DocumentChat({ documentId }: DocumentChatProps) {
     const router = useRouter();
-    const uniqueId = useId(); // Generovanie unikátneho ID pre komponent
+    const uniqueId = useId();
     const [documents, setDocuments] = useState<Document[]>([]);
     const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
@@ -78,34 +105,75 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
     const { execute: fetchFiles, isPending: isLoadingDocuments } = useAction(
         getUserFilesAction,
         {
-            onSuccess: (result) => {
-                if (result.data?.files) {
+            onSuccess: (result: unknown) => {
+                if (isSuccessResult(result)) {
                     const transformedDocs = transformFilesData(result.data.files);
                     setDocuments(transformedDocs);
 
-                    // Použitie uniqueId pre fallback ak documentId nie je poskytnutý
-                    const targetDocumentId = documentId || uniqueId;
-                    
-                    if (targetDocumentId) {
-                        const doc = transformedDocs.find((d) => d.id === targetDocumentId);
+                    console.log('📋 Loaded documents:', transformedDocs);
+                    console.log('🎯 Looking for document ID:', documentId);
+
+                    if (documentId) {
+                        const doc = transformedDocs.find((d) => d.id === documentId);
+                        console.log('🔍 Document search result:', doc);
+                        
                         if (doc) {
                             setSelectedDocument(doc);
                             loadChatHistory(doc.id);
-                        } else if (documentId) {
-                            // Len ak bol poskytnutý documentId a nebol nájdený
-                            toast.error('Document not found');
-                            router.push('/dashboard');
-                        } else if (transformedDocs.length > 0) {
-                            // Ak nemáme documentId, vyberieme prvý dokument
-                            setSelectedDocument(transformedDocs[0]);
-                            loadChatHistory(transformedDocs[0].id);
+                        } else {
+                            console.error('❌ Document not found in loaded documents');
+                            toast.error(`Document with ID ${documentId} not found`);
+                            if (transformedDocs.length > 0) {
+                                const firstDoc = transformedDocs[0];
+                                setSelectedDocument(firstDoc);
+                                loadChatHistory(firstDoc.id);
+                                toast.info(`Document not found. Showing ${firstDoc.name} instead.`);
+                            } else {
+                                setMessages([{
+                                    id: `error-${uniqueId}`,
+                                    role: 'assistant',
+                                    content: `Sorry, I couldn't find the document you're looking for and no other documents are available.`,
+                                    timestamp: new Date(),
+                                }]);
+                            }
                         }
+                    } else if (transformedDocs.length > 0) {
+                        const firstDoc = transformedDocs[0];
+                        setSelectedDocument(firstDoc);
+                        loadChatHistory(firstDoc.id);
+                        console.log('📄 Auto-selected first document:', firstDoc.name);
+                    } else {
+                        setMessages([{
+                            id: `welcome-${uniqueId}`,
+                            role: 'assistant',
+                            content: `Welcome! You don't have any documents yet. Please upload a document first to start chatting.`,
+                            timestamp: new Date(),
+                        }]);
                     }
+                } else {
+                    console.error('❌ Invalid data structure from action:', result);
+                    toast.error('Failed to load documents - invalid data format');
+                    
+                    setMessages([{
+                        id: `error-${uniqueId}`,
+                        role: 'assistant',
+                        content: `Unable to load your documents due to data format issues. Please try refreshing the page.`,
+                        timestamp: new Date(),
+                    }]);
                 }
             },
-            onError: (error) => {
+            onError: (error: unknown) => {
+                console.error('❌ Error loading documents:', error);
+                
+                const errorMessage = getErrorMessage(error);
                 toast.error('Failed to load documents');
-                console.error('Error loading documents:', error);
+                
+                setMessages([{
+                    id: `error-${uniqueId}`,
+                    role: 'assistant',
+                    content: `Error loading documents: ${errorMessage}. Please try again.`,
+                    timestamp: new Date(),
+                }]);
             },
         },
     );
@@ -145,7 +213,6 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
             }
         } catch (error) {
             console.error('Error loading chat history:', error);
-            // Fallback na základnú správu s unikátnym ID
             setMessages([
                 {
                     id: `welcome-error-${uniqueId}`,
@@ -199,7 +266,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
     // Načítanie dokumentov pri mount
     useEffect(() => {
         fetchFiles({});
-    }, [fetchFiles, documentId, uniqueId]);
+    }, [fetchFiles, documentId]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -253,6 +320,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
         setIsLoading(true);
 
         try {
+            console.log('💬 Sending message to document:', selectedDocument.id);
             const result = await chatWithDocument(selectedDocument.id, input);
             
             if (result.response) {
@@ -264,15 +332,28 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                 };
                 setMessages((prev) => [...prev, aiMessage]);
             }
-        } catch (error) {
-            console.error('Chat error:', error);
-            const errorMessage: Message = {
+        } catch (error: any) {
+            console.error('❌ Chat error in component:', error);
+            
+            let errorMessage = 'Sorry, I encountered an error while processing your request. ';
+            
+            if (error.message.includes('not found') || error.message.includes('PGRST116')) {
+                errorMessage += 'The document was not found or you do not have access to it.';
+            } else if (error.message.includes('still processing')) {
+                errorMessage += 'The document is still being processed. Please wait a moment and try again.';
+            } else if (error.message.includes('not authenticated')) {
+                errorMessage += 'Please log in again.';
+            } else {
+                errorMessage += 'Please try again.';
+            }
+
+            const errorResponse: Message = {
                 id: `error-${Date.now()}-${uniqueId}`,
                 role: 'assistant',
-                content: 'Sorry, I encountered an error while processing your request. Please try again.',
+                content: errorMessage,
                 timestamp: new Date(),
             };
-            setMessages((prev) => [...prev, errorMessage]);
+            setMessages((prev) => [...prev, errorResponse]);
             toast.error('Failed to send message');
         } finally {
             setIsLoading(false);
