@@ -11,19 +11,16 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { BookOpen, Home, MessageSquare } from 'lucide-react';
+import { BookOpen, Home } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
+import { UrlObject } from 'url';
 
 const menuItems = [
     {
         title: 'Dashboard',
         url: '/dashboard',
         icon: Home,
-    },
-    {
-        title: 'Chat',
-        url: '/dashboard/chat',
-        icon: MessageSquare,
     },
 ];
 
@@ -63,15 +60,13 @@ export function DashboardSidebar() {
                                             isActive={isActive}
                                             tooltip={item.title}
                                         >
-                                            <div
-                                                onClick={() =>
-                                                    router.push(item.url)
-                                                }
+                                            <Link
+                                                href={item.url as unknown as UrlObject}
                                                 className='cursor-pointer'
                                             >
                                                 <Icon className='h-4 w-4' />
                                                 <span>{item.title}</span>
-                                            </div>
+                                            </Link>
                                         </SidebarMenuButton>
                                     </SidebarMenuItem>
                                 );
