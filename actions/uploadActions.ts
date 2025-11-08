@@ -42,7 +42,7 @@ export const uploadFileAction = authenticatedAction
                 const timestamp = Date.now();
                 const safeFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
                 const filePath = `${userId}/${folder}/${timestamp}_${safeFileName}`;
-                
+
                 const { error: uploadError } = await supabase.storage
                     .from('documents')
                     .upload(filePath, byteCharacters, {
@@ -51,7 +51,9 @@ export const uploadFileAction = authenticatedAction
                     });
 
                 if (uploadError) {
-                    throw new Error(`Failed to upload ${file.name}: ${uploadError.message}`);
+                    throw new Error(
+                        `Failed to upload ${file.name}: ${uploadError.message}`,
+                    );
                 }
 
                 const { data: urlData } = supabase.storage
@@ -65,13 +67,19 @@ export const uploadFileAction = authenticatedAction
                         name: safeFileName,
                         status: 'processed',
                         chunks_count: 0,
-                        metadata: { originalFileName: file.name, size: file.size, type: file.type },
+                        metadata: {
+                            originalFileName: file.name,
+                            size: file.size,
+                            type: file.type,
+                        },
                     })
                     .select()
                     .maybeSingle();
 
                 if (docError || !docRecord) {
-                    throw new Error(`Failed to register document in database: ${docError?.message}`);
+                    throw new Error(
+                        `Failed to register document in database: ${docError?.message}`,
+                    );
                 }
 
                 uploadResults.push({
@@ -87,7 +95,10 @@ export const uploadFileAction = authenticatedAction
                 uploadResults.push({
                     fileName: file.name,
                     success: false,
-                    error: error instanceof Error ? error.message : 'Unknown error',
+                    error:
+                        error instanceof Error
+                            ? error.message
+                            : 'Unknown error',
                 });
             }
         }
@@ -97,7 +108,7 @@ export const uploadFileAction = authenticatedAction
             throw new Error(
                 `Failed to upload ${failedUploads.length} file(s): ${failedUploads
                     .map((f) => f.fileName)
-                    .join(', ')}`
+                    .join(', ')}`,
             );
         }
 
@@ -134,25 +145,33 @@ export const getUserFilesAction = authenticatedAction
             throw new Error(`Failed to fetch documents: ${docsError.message}`);
         }
 
-        const { data: storageFiles, error: storageError } = await supabase.storage
-            .from('documents')
-            .list(`${userId}/documents`, {
-                limit: 100,
-                offset: 0,
-                sortBy: { column: 'created_at', order: 'desc' },
-            });
+        const { data: storageFiles, error: storageError } =
+            await supabase.storage
+                .from('documents')
+                .list(`${userId}/documents`, {
+                    limit: 100,
+                    offset: 0,
+                    sortBy: { column: 'created_at', order: 'desc' },
+                });
 
         if (storageError) {
-            console.warn('Warning: failed to list storage files', storageError.message);
+            console.warn(
+                'Warning: failed to list storage files',
+                storageError.message,
+            );
         }
 
         const filesWithUrls = (docs || []).map((doc) => {
-            const storageFile = storageFiles?.find((f) => f.name.includes(doc.name));
+            const storageFile = storageFiles?.find((f) =>
+                f.name.includes(doc.name),
+            );
             return {
                 id: doc.id,
                 name: doc.name,
                 title: doc.name,
-                filePath: storageFile ? `${userId}/documents/${storageFile.name}` : undefined,
+                filePath: storageFile
+                    ? `${userId}/documents/${storageFile.name}`
+                    : undefined,
                 publicUrl: storageFile
                     ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/documents/${userId}/documents/${storageFile.name}`
                     : undefined,
@@ -172,17 +191,24 @@ export const deleteFileAction = authenticatedAction
     .inputSchema(deleteFileSchema)
     .action(async ({ parsedInput: { filePath } }) => {
         const supabase = await createClient();
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        const {
+            data: { user },
+            error: userError,
+        } = await supabase.auth.getUser();
         if (userError || !user) throw new Error('User not authenticated');
 
         const userId = user.id;
-        if (!filePath.startsWith(`${userId}/`)) throw new Error('Access denied');
+        if (!filePath.startsWith(`${userId}/`))
+            throw new Error('Access denied');
 
         const { error: storageError } = await supabase.storage
             .from('documents')
             .remove([filePath]);
 
-        if (storageError) throw new Error(`Failed to delete file from storage: ${storageError.message}`);
+        if (storageError)
+            throw new Error(
+                `Failed to delete file from storage: ${storageError.message}`,
+            );
 
         const { error: docError } = await supabase
             .from('processed_documents')
@@ -191,7 +217,10 @@ export const deleteFileAction = authenticatedAction
             .eq('name', filePath.split('/').pop());
 
         if (docError) {
-            console.warn('Warning: failed to delete document record', docError.message);
+            console.warn(
+                'Warning: failed to delete document record',
+                docError.message,
+            );
         }
 
         return { success: true, message: 'File deleted successfully' };
@@ -201,11 +230,15 @@ export const getFileDetailsAction = authenticatedAction
     .inputSchema(deleteFileSchema)
     .action(async ({ parsedInput: { filePath } }) => {
         const supabase = await createClient();
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        const {
+            data: { user },
+            error: userError,
+        } = await supabase.auth.getUser();
         if (userError || !user) throw new Error('User not authenticated');
 
         const userId = user.id;
-        if (!filePath.startsWith(`${userId}/`)) throw new Error('Access denied');
+        if (!filePath.startsWith(`${userId}/`))
+            throw new Error('Access denied');
 
         const { data: fileDetails } = supabase.storage
             .from('documents')
