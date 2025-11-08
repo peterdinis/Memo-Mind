@@ -6,82 +6,96 @@ import { PromptTemplate } from '@langchain/core/prompts';
 import { RunnableSequence } from '@langchain/core/runnables';
 import { createClient } from '@/supabase/server';
 
-export async function chatWithDocument(documentId: string, userMessage: string) {
-  const supabase = await createClient();
+export async function chatWithDocument(
+    documentId: string,
+    userMessage: string,
+) {
+    const supabase = await createClient();
 
-  try {
-    console.log('🔍 Searching for document with ID:', documentId);
+    try {
+        console.log('🔍 Searching for document with ID:', documentId);
 
-    // 1. Overenie autentifikácie používateľa
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      console.error('❌ Authentication error:', authError);
-      throw new Error('User not authenticated');
-    }
+        // 0️⃣ Kontrola vstupu
+        if (!documentId) {
+            throw new Error('No document ID provided');
+        }
 
-    console.log('👤 User authenticated:', user.id);
+        // 1️⃣ Overenie autentifikácie používateľa
+        const {
+            data: { user },
+            error: authError,
+        } = await supabase.auth.getUser();
 
-    // 2. Načítanie dokumentu z processed_documents s RLS
-    const { data: document, error: docError } = await supabase
-      .from('processed_documents')
-      .select('*')
-      .eq('id', documentId)
-      .eq('user_id', user.id) // Dôležité: filtrujeme podľa user_id pre RLS
-      .single();
+        if (authError || !user) {
+            console.error('❌ Authentication error:', authError);
+            throw new Error('User not authenticated');
+        }
 
-    console.log('📄 Document query result:', { 
-      documentFound: !!document, 
-      error: docError,
-      documentId 
-    });
+        console.log('👤 User authenticated:', user.id);
 
-    if (docError) {
-      console.error('❌ Database error:', docError);
-      
-      if (docError.code === 'PGRST116') {
-        throw new Error(`Document with ID ${documentId} not found or you don't have access to it`);
-      }
-      
-      throw new Error(`Database error: ${docError.message}`);
-    }
+        // 2️⃣ Načítanie dokumentu z processed_documents s RLS
+        const { data: document, error: docError } = await supabase
+            .from('processed_documents')
+            .select('*')
+            .eq('id', documentId)
+            .eq('user_id', user.id)
+            .maybeSingle(); // ✅ bezpečné, nehodí PGRST116 ak dokument neexistuje
 
-    if (!document) {
-      console.error('❌ Document not found in database');
-      throw new Error(`Document with ID ${documentId} not found in your documents`);
-    }
+        console.log('📄 Document query result:', {
+            documentFound: !!document,
+            error: docError,
+            documentId,
+        });
 
-    if (document.status !== 'processed') {
-      throw new Error(`Document is still ${document.status}. Please wait until processing is complete.`);
-    }
+        if (docError) {
+            console.error('❌ Database error:', docError);
+            throw new Error(`Database error: ${docError.message}`);
+        }
 
-    console.log('✅ Document found:', document.name);
+        if (!document) {
+            console.error('❌ Document not found or access denied');
+            throw new Error(
+                `Document with ID ${documentId} not found or you don't have access to it`,
+            );
+        }
 
-    // 3. Načítanie chat histórie pre kontext
-    const { data: chatHistory, error: historyError } = await supabase
-      .from('document_chats')
-      .select('user_message, assistant_response, created_at')
-      .eq('document_id', documentId)
-      .eq('user_id', user.id) // RLS filter
-      .order('created_at', { ascending: true })
-      .limit(6);
+        if (document.status !== 'processed') {
+            throw new Error(
+                `Document is still ${document.status}. Please wait until processing is complete.`,
+            );
+        }
 
-    if (historyError) {
-      console.error('Error loading chat history:', historyError);
-    }
+        console.log('✅ Document found:', document.name);
 
-    console.log('💬 Chat history loaded:', chatHistory?.length || 0, 'messages');
+        // 3️⃣ Načítanie chat histórie pre kontext
+        const { data: chatHistory, error: historyError } = await supabase
+            .from('document_chats')
+            .select('user_message, assistant_response, created_at')
+            .eq('document_id', documentId)
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: true })
+            .limit(6);
 
-    // 4. Načítanie obsahu dokumentu pre RAG
-    const documentContent = await getDocumentContent(document, supabase);
+        if (historyError) {
+            console.error('⚠️ Error loading chat history:', historyError);
+        }
 
-    // 5. Vytvorenie LangChain reťazca
-    const llm = new ChatOpenAI({
-      modelName: 'gpt-3.5-turbo',
-      temperature: 0.1,
-    });
+        console.log(
+            '💬 Chat history loaded:',
+            chatHistory?.length || 0,
+            'messages',
+        );
 
-    const prompt = PromptTemplate.fromTemplate(`
+        // 4️⃣ Načítanie obsahu dokumentu pre RAG
+        const documentContent = await getDocumentContent(document, supabase);
+
+        // 5️⃣ Vytvorenie LangChain reťazca
+        const llm = new ChatOpenAI({
+            modelName: 'gpt-3.5-turbo',
+            temperature: 0.1,
+        });
+
+        const prompt = PromptTemplate.fromTemplate(`
 You are a helpful AI assistant that analyzes documents. Use the following document context to answer the user's question accurately and helpfully.
 
 DOCUMENT CONTEXT:
@@ -109,121 +123,141 @@ INSTRUCTIONS:
 ANSWER:
 `);
 
-    const chain = RunnableSequence.from([
-      {
-        documentContext: () => documentContent,
-        documentTitle: () => document.name,
-        documentStatus: () => document.status,
-        chunksCount: () => document.chunks_count || 0,
-        processedDate: () => new Date(document.processed_at).toLocaleDateString(),
-        conversationHistory: () => formatChatHistory(chatHistory || []),
-        userQuestion: () => userMessage,
-      },
-      prompt,
-      llm,
-      new StringOutputParser(),
-    ]);
+        const chain = RunnableSequence.from([
+            {
+                documentContext: () => documentContent,
+                documentTitle: () => document.name,
+                documentStatus: () => document.status,
+                chunksCount: () => document.chunks_count || 0,
+                processedDate: () =>
+                    new Date(document.processed_at).toLocaleDateString(),
+                conversationHistory: () => formatChatHistory(chatHistory || []),
+                userQuestion: () => userMessage,
+            },
+            prompt,
+            llm,
+            new StringOutputParser(),
+        ]);
 
-    // 6. Spustenie reťazca a získanie odpovede
-    console.log('🤖 Generating AI response...');
-    const response = await chain.invoke({});
-    console.log('✅ AI response generated');
+        // 6️⃣ Spustenie reťazca a získanie odpovede
+        console.log('🤖 Generating AI response...');
+        const response = await chain.invoke({});
+        console.log('✅ AI response generated');
 
-    // 7. Uloženie chatu do databázy
-    await saveChatToDatabase(documentId, userMessage, response, supabase, user.id);
+        // 7️⃣ Uloženie chatu do databázy
+        await saveChatToDatabase(
+            documentId,
+            userMessage,
+            response,
+            supabase,
+            user.id,
+        );
 
-    return { response };
-
-  } catch (error) {
-    console.error('❌ Chat error:', error);
-    throw new Error(error instanceof Error ? error.message : 'Failed to process chat message');
-  }
+        return { response };
+    } catch (error) {
+        console.error('❌ Chat error:', error);
+        throw new Error(
+            error instanceof Error
+                ? error.message
+                : 'Failed to process chat message',
+        );
+    }
 }
 
-// Pomocné funkcie
-async function getDocumentContent(document: any, supabase: any): Promise<string> {
-  try {
-    console.log('📁 Downloading document:', document.name);
+/* ---------------------------------------------------------
+ * 🧩 Pomocné funkcie
+ * --------------------------------------------------------- */
 
-    // Načítanie súboru z storage
-    const { data: fileData, error: fileError } = await supabase
-      .storage
-      .from('documents')
-      .download(document.name);
+async function getDocumentContent(
+    document: any,
+    supabase: any,
+): Promise<string> {
+    try {
+        console.log('📁 Downloading document:', document.name);
 
-    if (fileError) {
-      console.error('Error downloading file:', fileError);
-      
-      // Fallback: vrátiť aspoň základné informácie o dokumente
-      return `Document: ${document.name}\nType: ${document.type}\nStatus: ${document.status}\n\nDocument content is currently unavailable for analysis.`;
+        const storagePath =
+            document.storage_path || document.path || document.name;
+
+        console.log('📂 Using storage path:', storagePath);
+
+        const { data: fileData, error: fileError } = await supabase.storage
+            .from('documents')
+            .download(storagePath);
+
+        if (fileError) {
+            console.error('⚠️ Error downloading file:', fileError);
+            return `Document: ${document.name}\nType: ${document.type}\nStatus: ${document.status}\n\nDocument content is currently unavailable for analysis.`;
+        }
+
+        const content = await extractTextFromFile(fileData, document.name);
+        console.log('📝 Extracted content length:', content.length);
+        return content.length > 4000
+            ? content.substring(0, 4000) + '...'
+            : content;
+    } catch (error) {
+        console.error('❌ Error getting document content:', error);
+        return 'Unable to retrieve document content. Please try again later.';
     }
-
-    // Extrakcia textu podľa typu súboru
-    const content = await extractTextFromFile(fileData, document.name);
-    
-    console.log('📝 Extracted content length:', content.length);
-    
-    // Ak je obsah príliš dlhý, zredukujeme ho
-    return content.length > 4000 ? content.substring(0, 4000) + '...' : content;
-    
-  } catch (error) {
-    console.error('Error getting document content:', error);
-    return 'Unable to retrieve document content. Please try again later.';
-  }
 }
 
 function formatChatHistory(chatHistory: any[]): string {
-  if (!chatHistory || chatHistory.length === 0) {
-    return 'No previous conversation.';
-  }
+    if (!chatHistory || chatHistory.length === 0) {
+        return 'No previous conversation.';
+    }
 
-  return chatHistory
-    .map(chat => `User: ${chat.user_message}\nAssistant: ${chat.assistant_response}`)
-    .join('\n\n');
+    return chatHistory
+        .map(
+            (chat) =>
+                `User: ${chat.user_message}\nAssistant: ${chat.assistant_response}`,
+        )
+        .join('\n\n');
 }
 
-async function saveChatToDatabase(documentId: string, userMessage: string, assistantResponse: string, supabase: any, userId: string) {
-  try {
-    const { error } = await supabase
-      .from('document_chats')
-      .insert({
-        document_id: documentId,
-        user_id: userId,
-        user_message: userMessage,
-        assistant_response: assistantResponse,
-        metadata: {
-          response_length: assistantResponse.length,
-          timestamp: new Date().toISOString()
+async function saveChatToDatabase(
+    documentId: string,
+    userMessage: string,
+    assistantResponse: string,
+    supabase: any,
+    userId: string,
+) {
+    try {
+        const { error } = await supabase.from('document_chats').insert({
+            document_id: documentId,
+            user_id: userId,
+            user_message: userMessage,
+            assistant_response: assistantResponse,
+            metadata: {
+                response_length: assistantResponse.length,
+                timestamp: new Date().toISOString(),
+            },
+        });
+
+        if (error) {
+            console.error('⚠️ Error saving chat:', error);
+        } else {
+            console.log('💾 Chat saved to database');
         }
-      });
-
-    if (error) {
-      console.error('Error saving chat:', error);
-      // Nechceme zlyhať celú operáciu kvôli chybe ukladania chatu
-    } else {
-      console.log('💾 Chat saved to database');
+    } catch (error) {
+        console.error('❌ Error in saveChatToDatabase:', error);
     }
-  } catch (error) {
-    console.error('Error in saveChatToDatabase:', error);
-  }
 }
 
-async function extractTextFromFile(fileData: Blob, fileName: string): Promise<string> {
-  const fileExtension = fileName.split('.').pop()?.toLowerCase();
-  
-  try {
-    // Pre textové súbory
-    if (fileExtension === 'txt') {
-      return await fileData.text();
-    }
-    
-    // Pre jednoduchosť vrátime základný text pre všetky typy súborov
-    // V produkčnom prostredí by ste tu pridali podporu pre PDF, DOCX, etc.
-    return `This is a ${fileExtension?.toUpperCase()} document named "${fileName}". 
+async function extractTextFromFile(
+    fileData: Blob,
+    fileName: string,
+): Promise<string> {
+    const fileExtension = fileName.split('.').pop()?.toLowerCase();
+
+    try {
+        if (fileExtension === 'txt') {
+            return await fileData.text();
+        }
+
+        // Pre ostatné typy len jednoduchá fallback správa
+        return `This is a ${fileExtension?.toUpperCase()} document named "${fileName}". 
 For detailed analysis, please ensure the document has been properly processed and text extraction is configured for ${fileExtension} files.`;
-    
-  } catch (error) {
-    console.error('Error extracting text from file:', error);
-    return `Error extracting text from ${fileExtension} file.`;
-  }
+    } catch (error) {
+        console.error('❌ Error extracting text from file:', error);
+        return `Error extracting text from ${fileExtension} file.`;
+    }
 }

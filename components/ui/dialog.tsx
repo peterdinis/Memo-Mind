@@ -50,7 +50,7 @@ function DialogContent({
     className,
     children,
     showCloseButton = true,
-    title = "Dialog",
+    title = 'Dialog',
     ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
     showCloseButton?: boolean;
@@ -67,7 +67,7 @@ function DialogContent({
                 )}
                 {...props}
             >
-                <DialogTitle className="sr-only">{title}</DialogTitle>
+                <DialogTitle className='sr-only'>{title}</DialogTitle>
                 {children}
                 {showCloseButton && (
                     <DialogPrimitive.Close

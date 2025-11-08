@@ -61,7 +61,9 @@ export function DashboardSidebar() {
                                             tooltip={item.title}
                                         >
                                             <Link
-                                                href={item.url as unknown as UrlObject}
+                                                href={
+                                                    item.url as unknown as UrlObject
+                                                }
                                                 className='cursor-pointer'
                                             >
                                                 <Icon className='h-4 w-4' />

@@ -1,4 +1,4 @@
-import z from "zod";
+import z from 'zod';
 
 export const chatWithDocumentSchema = z.object({
     documentId: z.string(),

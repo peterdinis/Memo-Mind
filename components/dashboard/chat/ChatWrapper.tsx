@@ -31,7 +31,10 @@ import {
 import { useAction } from 'next-safe-action/hooks';
 import { getUserFilesAction } from '@/actions/uploadActions';
 import { chatWithDocument } from '@/actions/chatActions';
-import { getDocumentChatHistory, clearDocumentChatHistory } from '@/actions/chatHistoryActions';
+import {
+    getDocumentChatHistory,
+    clearDocumentChatHistory,
+} from '@/actions/chatHistoryActions';
 import { toast } from 'sonner';
 import { Spinner } from '@/components/ui/spinner';
 
@@ -65,11 +68,13 @@ interface DocumentChatProps {
 }
 
 // Helper funkcie pre type-safe prístup k dátam
-function isSuccessResult(result: unknown): result is { data: { files: unknown[] } } {
+function isSuccessResult(
+    result: unknown,
+): result is { data: { files: unknown[] } } {
     return (
-        typeof result === 'object' && 
-        result !== null && 
-        'data' in result && 
+        typeof result === 'object' &&
+        result !== null &&
+        'data' in result &&
         typeof (result as any).data === 'object' &&
         (result as any).data !== null &&
         'files' in (result as any).data &&
@@ -95,7 +100,9 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
     const router = useRouter();
     const uniqueId = useId();
     const [documents, setDocuments] = useState<Document[]>([]);
-    const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+    const [selectedDocument, setSelectedDocument] = useState<Document | null>(
+        null,
+    );
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -107,73 +114,99 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
         {
             onSuccess: (result: unknown) => {
                 if (isSuccessResult(result)) {
-                    const transformedDocs = transformFilesData(result.data.files);
+                    const transformedDocs = transformFilesData(
+                        result.data.files,
+                    );
                     setDocuments(transformedDocs);
 
                     console.log('📋 Loaded documents:', transformedDocs);
                     console.log('🎯 Looking for document ID:', documentId);
 
                     if (documentId) {
-                        const doc = transformedDocs.find((d) => d.id === documentId);
+                        const doc = transformedDocs.find(
+                            (d) => d.id === documentId,
+                        );
                         console.log('🔍 Document search result:', doc);
-                        
+
                         if (doc) {
                             setSelectedDocument(doc);
                             loadChatHistory(doc.id);
                         } else {
-                            console.error('❌ Document not found in loaded documents');
-                            toast.error(`Document with ID ${documentId} not found`);
+                            console.error(
+                                '❌ Document not found in loaded documents',
+                            );
+                            toast.error(
+                                `Document with ID ${documentId} not found`,
+                            );
                             if (transformedDocs.length > 0) {
                                 const firstDoc = transformedDocs[0];
                                 setSelectedDocument(firstDoc);
                                 loadChatHistory(firstDoc.id);
-                                toast.info(`Document not found. Showing ${firstDoc.name} instead.`);
+                                toast.info(
+                                    `Document not found. Showing ${firstDoc.name} instead.`,
+                                );
                             } else {
-                                setMessages([{
-                                    id: `error-${uniqueId}`,
-                                    role: 'assistant',
-                                    content: `Sorry, I couldn't find the document you're looking for and no other documents are available.`,
-                                    timestamp: new Date(),
-                                }]);
+                                setMessages([
+                                    {
+                                        id: `error-${uniqueId}`,
+                                        role: 'assistant',
+                                        content: `Sorry, I couldn't find the document you're looking for and no other documents are available.`,
+                                        timestamp: new Date(),
+                                    },
+                                ]);
                             }
                         }
                     } else if (transformedDocs.length > 0) {
                         const firstDoc = transformedDocs[0];
                         setSelectedDocument(firstDoc);
                         loadChatHistory(firstDoc.id);
-                        console.log('📄 Auto-selected first document:', firstDoc.name);
+                        console.log(
+                            '📄 Auto-selected first document:',
+                            firstDoc.name,
+                        );
                     } else {
-                        setMessages([{
-                            id: `welcome-${uniqueId}`,
-                            role: 'assistant',
-                            content: `Welcome! You don't have any documents yet. Please upload a document first to start chatting.`,
-                            timestamp: new Date(),
-                        }]);
+                        setMessages([
+                            {
+                                id: `welcome-${uniqueId}`,
+                                role: 'assistant',
+                                content: `Welcome! You don't have any documents yet. Please upload a document first to start chatting.`,
+                                timestamp: new Date(),
+                            },
+                        ]);
                     }
                 } else {
-                    console.error('❌ Invalid data structure from action:', result);
-                    toast.error('Failed to load documents - invalid data format');
-                    
-                    setMessages([{
-                        id: `error-${uniqueId}`,
-                        role: 'assistant',
-                        content: `Unable to load your documents due to data format issues. Please try refreshing the page.`,
-                        timestamp: new Date(),
-                    }]);
+                    console.error(
+                        '❌ Invalid data structure from action:',
+                        result,
+                    );
+                    toast.error(
+                        'Failed to load documents - invalid data format',
+                    );
+
+                    setMessages([
+                        {
+                            id: `error-${uniqueId}`,
+                            role: 'assistant',
+                            content: `Unable to load your documents due to data format issues. Please try refreshing the page.`,
+                            timestamp: new Date(),
+                        },
+                    ]);
                 }
             },
             onError: (error: unknown) => {
                 console.error('❌ Error loading documents:', error);
-                
+
                 const errorMessage = getErrorMessage(error);
                 toast.error('Failed to load documents');
-                
-                setMessages([{
-                    id: `error-${uniqueId}`,
-                    role: 'assistant',
-                    content: `Error loading documents: ${errorMessage}. Please try again.`,
-                    timestamp: new Date(),
-                }]);
+
+                setMessages([
+                    {
+                        id: `error-${uniqueId}`,
+                        role: 'assistant',
+                        content: `Error loading documents: ${errorMessage}. Please try again.`,
+                        timestamp: new Date(),
+                    },
+                ]);
             },
         },
     );
@@ -183,20 +216,22 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
         try {
             const result = await getDocumentChatHistory(docId);
             if (result.chatHistory) {
-                const historyMessages: Message[] = result.chatHistory.flatMap(chat => [
-                    {
-                        id: `user-${chat.id}-${uniqueId}`,
-                        role: 'user' as const,
-                        content: chat.user_message,
-                        timestamp: new Date(chat.created_at),
-                    },
-                    {
-                        id: `assistant-${chat.id}-${uniqueId}`,
-                        role: 'assistant' as const,
-                        content: chat.assistant_response,
-                        timestamp: new Date(chat.created_at),
-                    }
-                ]);
+                const historyMessages: Message[] = result.chatHistory.flatMap(
+                    (chat) => [
+                        {
+                            id: `user-${chat.id}-${uniqueId}`,
+                            role: 'user' as const,
+                            content: chat.user_message,
+                            timestamp: new Date(chat.created_at),
+                        },
+                        {
+                            id: `assistant-${chat.id}-${uniqueId}`,
+                            role: 'assistant' as const,
+                            content: chat.assistant_response,
+                            timestamp: new Date(chat.created_at),
+                        },
+                    ],
+                );
 
                 if (historyMessages.length === 0) {
                     setMessages([
@@ -322,7 +357,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
         try {
             console.log('💬 Sending message to document:', selectedDocument.id);
             const result = await chatWithDocument(selectedDocument.id, input);
-            
+
             if (result.response) {
                 const aiMessage: Message = {
                     id: `assistant-${Date.now()}-${uniqueId}`,
@@ -334,13 +369,19 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
             }
         } catch (error: any) {
             console.error('❌ Chat error in component:', error);
-            
-            let errorMessage = 'Sorry, I encountered an error while processing your request. ';
-            
-            if (error.message.includes('not found') || error.message.includes('PGRST116')) {
-                errorMessage += 'The document was not found or you do not have access to it.';
+
+            let errorMessage =
+                'Sorry, I encountered an error while processing your request. ';
+
+            if (
+                error.message.includes('not found') ||
+                error.message.includes('PGRST116')
+            ) {
+                errorMessage +=
+                    'The document was not found or you do not have access to it.';
             } else if (error.message.includes('still processing')) {
-                errorMessage += 'The document is still being processed. Please wait a moment and try again.';
+                errorMessage +=
+                    'The document is still being processed. Please wait a moment and try again.';
             } else if (error.message.includes('not authenticated')) {
                 errorMessage += 'Please log in again.';
             } else {
@@ -411,7 +452,8 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                     </div>
                     <p className='text-muted-foreground text-sm'>
                         {doc.type} document - {doc.size}
-                        {doc.chunks_count && ` - ${doc.chunks_count} chunks processed`}
+                        {doc.chunks_count &&
+                            ` - ${doc.chunks_count} chunks processed`}
                     </p>
                 </div>
                 <ScrollArea className='h-[500px]'>
@@ -429,7 +471,10 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                             <p>Uploaded: {doc.uploadedAt}</p>
                                             <p>Status: {doc.status}</p>
                                             {doc.chunks_count && (
-                                                <p>Processed chunks: {doc.chunks_count}</p>
+                                                <p>
+                                                    Processed chunks:{' '}
+                                                    {doc.chunks_count}
+                                                </p>
                                             )}
                                         </div>
                                     </div>
@@ -440,15 +485,24 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                                 This is a preview of "
                                                 {doc.title}".
                                                 <br />
-                                                The document is processed and ready for AI analysis.
+                                                The document is processed and
+                                                ready for AI analysis.
                                                 {doc.chunks_count && (
-                                                    <><br />{doc.chunks_count} text chunks are available for questioning.</>
+                                                    <>
+                                                        <br />
+                                                        {doc.chunks_count} text
+                                                        chunks are available for
+                                                        questioning.
+                                                    </>
                                                 )}
                                             </p>
                                             <Button
                                                 className='mt-4'
                                                 onClick={(e) =>
-                                                    handleDownloadDocument(doc, e)
+                                                    handleDownloadDocument(
+                                                        doc,
+                                                        e,
+                                                    )
                                                 }
                                             >
                                                 <Download className='mr-2 h-4 w-4' />
@@ -493,7 +547,8 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                 No documents found
                             </EmptyTitle>
                             <EmptyDescription className='text-xl leading-8'>
-                                We couldn't find the document you're looking for.
+                                We couldn't find the document you're looking
+                                for.
                             </EmptyDescription>
                         </EmptyHeader>
                         <EmptyContent className='mx-auto max-w-md'>
@@ -594,7 +649,10 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                                 {doc.status}
                                             </Badge>
                                             {doc.chunks_count && (
-                                                <Badge variant='outline' className='text-xs'>
+                                                <Badge
+                                                    variant='outline'
+                                                    className='text-xs'
+                                                >
                                                     {doc.chunks_count} chunks
                                                 </Badge>
                                             )}
@@ -611,11 +669,16 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                     <CardHeader className='pb-4'>
                         <div className='flex items-center justify-between'>
                             <CardTitle className='flex items-center gap-2'>
-                                {selectedDocument && getFileIcon(selectedDocument.type)}
-                                {selectedDocument?.title || 'No document selected'}
+                                {selectedDocument &&
+                                    getFileIcon(selectedDocument.type)}
+                                {selectedDocument?.title ||
+                                    'No document selected'}
                             </CardTitle>
                             {selectedDocument && (
-                                <Badge variant='secondary' className='capitalize'>
+                                <Badge
+                                    variant='secondary'
+                                    className='capitalize'
+                                >
                                     {selectedDocument.type}
                                 </Badge>
                             )}
@@ -623,7 +686,9 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                         {selectedDocument && (
                             <div className='text-muted-foreground flex items-center gap-4 text-sm'>
                                 <span>Size: {selectedDocument.size}</span>
-                                <span>Uploaded: {selectedDocument.uploadedAt}</span>
+                                <span>
+                                    Uploaded: {selectedDocument.uploadedAt}
+                                </span>
                                 <span>Status: {selectedDocument.status}</span>
                             </div>
                         )}
@@ -638,9 +703,12 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                         <File className='text-muted-foreground h-8 w-8' />
                                     </EmptyMedia>
                                     <EmptyHeader>
-                                        <EmptyTitle>No document selected</EmptyTitle>
+                                        <EmptyTitle>
+                                            No document selected
+                                        </EmptyTitle>
                                         <EmptyDescription>
-                                            Select a document from the list to view its content
+                                            Select a document from the list to
+                                            view its content
                                         </EmptyDescription>
                                     </EmptyHeader>
                                 </Empty>
@@ -707,10 +775,13 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                                 </p>
                                             </div>
                                             <p className='text-muted-foreground text-xs'>
-                                                {message.timestamp.toLocaleTimeString([], {
-                                                    hour: '2-digit',
-                                                    minute: '2-digit',
-                                                })}
+                                                {message.timestamp.toLocaleTimeString(
+                                                    [],
+                                                    {
+                                                        hour: '2-digit',
+                                                        minute: '2-digit',
+                                                    },
+                                                )}
                                             </p>
                                         </div>
                                     </div>
@@ -727,11 +798,17 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                                     <div className='bg-muted-foreground h-2 w-2 animate-bounce rounded-full'></div>
                                                     <div
                                                         className='bg-muted-foreground h-2 w-2 animate-bounce rounded-full'
-                                                        style={{ animationDelay: '0.1s' }}
+                                                        style={{
+                                                            animationDelay:
+                                                                '0.1s',
+                                                        }}
                                                     ></div>
                                                     <div
                                                         className='bg-muted-foreground h-2 w-2 animate-bounce rounded-full'
-                                                        style={{ animationDelay: '0.2s' }}
+                                                        style={{
+                                                            animationDelay:
+                                                                '0.2s',
+                                                        }}
                                                     ></div>
                                                 </div>
                                             </div>
@@ -749,17 +826,21 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                     Try asking about this document:
                                 </p>
                                 <div className='flex flex-wrap gap-2'>
-                                    {suggestedQuestions.map((question, index) => (
-                                        <Button
-                                            key={`suggestion-${index}-${uniqueId}`}
-                                            variant='outline'
-                                            size='sm'
-                                            className='h-auto px-3 py-2 text-xs'
-                                            onClick={() => setInput(question)}
-                                        >
-                                            {question}
-                                        </Button>
-                                    ))}
+                                    {suggestedQuestions.map(
+                                        (question, index) => (
+                                            <Button
+                                                key={`suggestion-${index}-${uniqueId}`}
+                                                variant='outline'
+                                                size='sm'
+                                                className='h-auto px-3 py-2 text-xs'
+                                                onClick={() =>
+                                                    setInput(question)
+                                                }
+                                            >
+                                                {question}
+                                            </Button>
+                                        ),
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -780,7 +861,11 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                 />
                                 <Button
                                     onClick={handleSendMessage}
-                                    disabled={!input.trim() || !selectedDocument || isLoading}
+                                    disabled={
+                                        !input.trim() ||
+                                        !selectedDocument ||
+                                        isLoading
+                                    }
                                     size='icon'
                                 >
                                     <Send className='h-4 w-4' />
