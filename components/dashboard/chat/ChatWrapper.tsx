@@ -119,22 +119,15 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                     );
                     setDocuments(transformedDocs);
 
-                    console.log('📋 Loaded documents:', transformedDocs);
-                    console.log('🎯 Looking for document ID:', documentId);
-
                     if (documentId) {
                         const doc = transformedDocs.find(
                             (d) => d.id === documentId,
                         );
-                        console.log('🔍 Document search result:', doc);
 
                         if (doc) {
                             setSelectedDocument(doc);
                             loadChatHistory(doc.id);
                         } else {
-                            console.error(
-                                '❌ Document not found in loaded documents',
-                            );
                             toast.error(
                                 `Document with ID ${documentId} not found`,
                             );
@@ -160,10 +153,6 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                         const firstDoc = transformedDocs[0];
                         setSelectedDocument(firstDoc);
                         loadChatHistory(firstDoc.id);
-                        console.log(
-                            '📄 Auto-selected first document:',
-                            firstDoc.name,
-                        );
                     } else {
                         setMessages([
                             {
@@ -175,10 +164,6 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                         ]);
                     }
                 } else {
-                    console.error(
-                        '❌ Invalid data structure from action:',
-                        result,
-                    );
                     toast.error(
                         'Failed to load documents - invalid data format',
                     );
@@ -194,8 +179,6 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                 }
             },
             onError: (error: unknown) => {
-                console.error('❌ Error loading documents:', error);
-
                 const errorMessage = getErrorMessage(error);
                 toast.error('Failed to load documents');
 
@@ -247,7 +230,6 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                 }
             }
         } catch (error) {
-            console.error('Error loading chat history:', error);
             setMessages([
                 {
                     id: `welcome-error-${uniqueId}`,
@@ -355,7 +337,6 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
         setIsLoading(true);
 
         try {
-            console.log('💬 Sending message to document:', selectedDocument.id);
             const result = await chatWithDocument(selectedDocument.id, input);
 
             if (result.response) {
@@ -368,8 +349,6 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                 setMessages((prev) => [...prev, aiMessage]);
             }
         } catch (error: any) {
-            console.error('❌ Chat error in component:', error);
-
             let errorMessage =
                 'Sorry, I encountered an error while processing your request. ';
 
