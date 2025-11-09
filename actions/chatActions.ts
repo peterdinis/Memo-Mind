@@ -43,7 +43,9 @@ export async function chatWithDocument(
 
         // Check file size limit (50MB)
         if (document.file_size > 50 * 1024 * 1024) {
-            throw new Error('Document is too large for analysis. Please use a smaller document (under 50MB).');
+            throw new Error(
+                'Document is too large for analysis. Please use a smaller document (under 50MB).',
+            );
         }
 
         // Get chat history
@@ -133,13 +135,16 @@ ANSWER:
                 documentStatus: () => document.status,
                 chunksCount: () => document.chunks_count || 0,
                 processedDate: () =>
-                    new Date(document.processed_at).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                    }),
+                    new Date(document.processed_at).toLocaleDateString(
+                        'en-US',
+                        {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                        },
+                    ),
                 conversationHistory: () => formatChatHistory(chatHistory || []),
                 userQuestion: () => userMessage,
             },
@@ -174,8 +179,12 @@ async function getDocumentContent(
     supabase: any,
 ): Promise<string> {
     try {
-        console.log('Getting content for document:', document.name, document.type);
-        
+        console.log(
+            'Getting content for document:',
+            document.name,
+            document.type,
+        );
+
         // First, check if we have processed chunks in the database
         const { data: chunks, error: chunksError } = await supabase
             .from('document_chunks')
@@ -187,19 +196,25 @@ async function getDocumentContent(
         if (!chunksError && chunks && chunks.length > 0) {
             console.log(`Using ${chunks.length} pre-processed chunks`);
             // Use pre-processed chunks if available
-            const combinedContent = chunks.map((chunk: { chunk_index: number; content: any; }, index: any) => 
-                `[Chunk ${chunk.chunk_index + 1}]: ${chunk.content}`
-            ).join('\n\n');
-            
-            return combinedContent.length > 12000 
-                ? combinedContent.substring(0, 12000) + '...' 
+            const combinedContent = chunks
+                .map(
+                    (
+                        chunk: { chunk_index: number; content: any },
+                        index: any,
+                    ) => `[Chunk ${chunk.chunk_index + 1}]: ${chunk.content}`,
+                )
+                .join('\n\n');
+
+            return combinedContent.length > 12000
+                ? combinedContent.substring(0, 12000) + '...'
                 : combinedContent;
         }
 
         console.log('No chunks found, downloading original file...');
-        
+
         // Fallback to file download if no chunks available
-        const storagePath = document.storage_path || document.path || document.name;
+        const storagePath =
+            document.storage_path || document.path || document.name;
         const { data: fileData, error: fileError } = await supabase.storage
             .from('documents')
             .download(storagePath);
@@ -210,17 +225,16 @@ async function getDocumentContent(
         }
 
         const content = await extractTextFromFile(fileData, document.name);
-        
+
         if (!content || content.trim().length < 10) {
             return `Document "${document.name}" is available but content extraction yielded minimal or no text. This may be because:\n- The document is image-based (scanned PDF, images)\n- The document is encrypted or password-protected\n- The file format is not fully supported\n- The document is empty\n\nPlease ensure your document contains extractable text and try again.`;
         }
 
         console.log(`Extracted ${content.length} characters from document`);
-        
-        return content.length > 12000 
-            ? content.substring(0, 12000) + '...' 
-            : content;
 
+        return content.length > 12000
+            ? content.substring(0, 12000) + '...'
+            : content;
     } catch (error) {
         console.error('Error in getDocumentContent:', error);
         return `Unable to retrieve document content: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again later or contact support if the issue persists.`;
@@ -231,14 +245,16 @@ async function extractTextFromPDF(fileData: Blob): Promise<string> {
     try {
         // CommonJS require pre pdf-parse
         const pdfParse = require('pdf-parse');
-        
+
         const arrayBuffer = await fileData.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
         const data = await pdfParse(buffer);
         return data.text || 'No text content could be extracted from this PDF.';
     } catch (error) {
         console.error('PDF extraction error:', error);
-        throw new Error(`PDF text extraction failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        throw new Error(
+            `PDF text extraction failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        );
     }
 }
 
@@ -246,10 +262,15 @@ async function extractTextFromDOCX(fileData: Blob): Promise<string> {
     try {
         const arrayBuffer = await fileData.arrayBuffer();
         const result = await mammoth.extractRawText({ arrayBuffer });
-        return result.value || 'No text content could be extracted from this DOCX document.';
+        return (
+            result.value ||
+            'No text content could be extracted from this DOCX document.'
+        );
     } catch (error) {
         console.error('DOCX extraction error:', error);
-        throw new Error(`DOCX text extraction failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        throw new Error(
+            `DOCX text extraction failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        );
     }
 }
 
@@ -261,7 +282,7 @@ async function extractTextFromFile(
 
     try {
         console.log(`Extracting text from ${fileExtension} file: ${fileName}`);
-        
+
         if (fileExtension === 'txt') {
             const text = await fileData.text();
             return text || 'Text file is empty or could not be read.';
@@ -299,7 +320,9 @@ async function extractTextFromFile(
         }
     } catch (error) {
         console.error('Error in extractTextFromFile:', error);
-        throw new Error(`Failed to extract text from ${fileExtension} file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        throw new Error(
+            `Failed to extract text from ${fileExtension} file: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        );
     }
 }
 
@@ -332,7 +355,7 @@ async function saveChatToDatabase(
             metadata: {
                 response_length: assistantResponse.length,
                 timestamp: new Date().toISOString(),
-                model: 'gpt-3.5-turbo'
+                model: 'gpt-3.5-turbo',
             },
         });
 
