@@ -349,7 +349,6 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                 setMessages((prev) => [...prev, aiMessage]);
             }
         } catch (error: any) {
-
             let errorMessage =
                 'Sorry, I encountered an error while processing your request. ';
 

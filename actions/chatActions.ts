@@ -6,7 +6,10 @@ import { PromptTemplate } from '@langchain/core/prompts';
 import { RunnableSequence } from '@langchain/core/runnables';
 import { createClient } from '@/supabase/server';
 
-export async function chatWithDocument(documentId: string, userMessage: string) {
+export async function chatWithDocument(
+    documentId: string,
+    userMessage: string,
+) {
     const supabase = await createClient();
 
     try {
@@ -115,7 +118,10 @@ ANSWER:
     }
 }
 
-async function getDocumentContent(document: any, supabase: any): Promise<string> {
+async function getDocumentContent(
+    document: any,
+    supabase: any,
+): Promise<string> {
     try {
         const storagePath =
             document.storage_path || document.path || document.name;
