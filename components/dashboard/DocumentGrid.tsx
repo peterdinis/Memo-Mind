@@ -50,7 +50,7 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect, Suspense } from 'react';
 import UploadCard from '../documents/UploadCard';
 import { useAction } from 'next-safe-action/hooks';
-import { getUserFilesAction } from '@/actions/uploadActions';
+import { getUserFilesAction, deleteFileAction } from '@/actions/uploadActions';
 import { toast } from 'sonner';
 import { Spinner } from '@/components/ui/spinner';
 
@@ -87,13 +87,15 @@ interface Document {
 interface FileFromAPI {
     id: string;
     name: string;
-    originalName: string;
+    title: string;
+    filePath?: string;
+    publicUrl?: string;
     created_at: string;
     updated_at?: string;
-    last_accessed_at?: string;
-    metadata?: any;
+    status: string;
+    chunks_count: number;
     size: number;
-    publicUrl: string;
+    type: string;
 }
 
 export function DocumentGrid() {
@@ -132,10 +134,13 @@ export function DocumentGrid() {
                 toast.success(
                     result.data?.message || 'File deleted successfully',
                 );
-                fetchFiles({});
+                fetchFiles();
+                setDeleteDialogOpen(false);
+                setSelectedDoc(null);
             },
             onError: (error) => {
                 toast.error('Failed to delete file');
+                console.error('Delete error:', error);
             },
         },
     );
@@ -144,18 +149,18 @@ export function DocumentGrid() {
         return files.map((file, index) => ({
             id: file.id || `file-${index}`,
             name: file.name,
-            originalName: file.originalName || file.name,
-            publicUrl: file.publicUrl,
+            originalName: file.name,
+            publicUrl: file.publicUrl || '',
             size: file.size || 0,
             created_at: file.created_at || new Date().toISOString(),
-            filePath: file.originalName || file.name,
-            type: getFileType(file.name),
-            status: 'processed' as const,
+            filePath: file.filePath || file.name,
+            type: file.type || getFileType(file.name),
+            status: (file.status as 'processing' | 'processed' | 'error') || 'processed',
         }));
     };
 
     useEffect(() => {
-        fetchFiles({});
+        fetchFiles();
     }, [fetchFiles]);
 
     function getFileType(filename: string): string {
@@ -203,6 +208,11 @@ export function DocumentGrid() {
     const handleQuickDownload = (doc: Document, e: React.MouseEvent) => {
         e.stopPropagation();
 
+        if (!doc.publicUrl) {
+            toast.error('Download URL not available');
+            return;
+        }
+
         const link = document.createElement('a');
         link.href = doc.publicUrl;
         link.download = doc.name;
@@ -216,6 +226,11 @@ export function DocumentGrid() {
 
     const handleQuickShare = (doc: Document, e: React.MouseEvent) => {
         e.stopPropagation();
+
+        if (!doc.publicUrl) {
+            toast.error('Share URL not available');
+            return;
+        }
 
         navigator.clipboard.writeText(doc.publicUrl).then(() => {
             setCopied(true);
@@ -287,24 +302,25 @@ export function DocumentGrid() {
     const handleDeleteConfirm = () => {
         if (selectedDoc && selectedDoc.filePath) {
             deleteFile({ filePath: selectedDoc.filePath });
+        } else {
+            setDeleteDialogOpen(false);
+            setSelectedDoc(null);
         }
-        setDeleteDialogOpen(false);
-        setSelectedDoc(null);
     };
 
     const handleShareConfirm = () => {
-        if (selectedDoc) {
-            const shareUrl = selectedDoc.publicUrl;
-            navigator.clipboard.writeText(shareUrl).then(() => {
+        if (selectedDoc && selectedDoc.publicUrl) {
+            navigator.clipboard.writeText(selectedDoc.publicUrl).then(() => {
                 setCopied(true);
                 setTimeout(() => setCopied(false), 2000);
+                toast.success('Link copied to clipboard');
             });
         }
         setShareDialogOpen(false);
     };
 
     const handleDownloadConfirm = () => {
-        if (selectedDoc) {
+        if (selectedDoc && selectedDoc.publicUrl) {
             const link = document.createElement('a');
             link.href = selectedDoc.publicUrl;
             link.download = selectedDoc.name;
@@ -320,9 +336,8 @@ export function DocumentGrid() {
     };
 
     const copyShareLink = () => {
-        if (selectedDoc) {
-            const shareUrl = selectedDoc.publicUrl;
-            navigator.clipboard.writeText(shareUrl).then(() => {
+        if (selectedDoc && selectedDoc.publicUrl) {
+            navigator.clipboard.writeText(selectedDoc.publicUrl).then(() => {
                 setCopied(true);
                 setTimeout(() => setCopied(false), 2000);
                 toast.success('Link copied to clipboard');
@@ -331,7 +346,7 @@ export function DocumentGrid() {
     };
 
     const handleRefresh = () => {
-        fetchFiles({});
+        fetchFiles();
         toast.info('Refreshing files...');
     };
 
@@ -473,7 +488,9 @@ export function DocumentGrid() {
                     fallback={<Spinner variant={'default'} size={'lg'} />}
                 >
                     {isLoading ? (
-                        <Spinner variant={'default'} size={'lg'} />
+                        <div className="flex justify-center py-8">
+                            <Spinner variant={'default'} size={'lg'} />
+                        </div>
                     ) : (
                         <>
                             <div className='mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'>
@@ -733,13 +750,14 @@ export function DocumentGrid() {
                             <div className='flex items-center space-x-2'>
                                 <div className='bg-muted flex-1 overflow-hidden rounded-md border px-3 py-2 text-sm'>
                                     <span className='truncate'>
-                                        {selectedDoc?.publicUrl || ''}
+                                        {selectedDoc?.publicUrl || 'URL not available'}
                                     </span>
                                 </div>
                                 <Button
                                     size='sm'
                                     className='px-3'
                                     onClick={copyShareLink}
+                                    disabled={!selectedDoc?.publicUrl}
                                 >
                                     {copied ? (
                                         <CheckCircle2 className='h-4 w-4' />
@@ -777,7 +795,10 @@ export function DocumentGrid() {
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDownloadConfirm}>
+                        <AlertDialogAction 
+                            onClick={handleDownloadConfirm}
+                            disabled={!selectedDoc?.publicUrl}
+                        >
                             Download
                         </AlertDialogAction>
                     </AlertDialogFooter>

@@ -1,182 +1,219 @@
 'use server';
 
+import { authenticatedAction } from '@/lib/next-safe-action';
+import {
+    deleteFileSchema,
+    uploadFileSchema,
+    userFilesSchema,
+} from '@/schemas/uploadSchemas';
 import { createClient } from '@/supabase/server';
-import { processAndEmbedDocument } from './processDocumentActions';
 
-export async function uploadDocumentAction(formData: FormData) {
-  const supabase = await createClient();
+export const uploadFileAction = authenticatedAction
+    .schema(uploadFileSchema)
+    .action(async ({ parsedInput: { files, folder } }) => {
+        const supabase = await createClient();
 
-  try {
-    const file = formData.get('file') as File;
-    if (!file) throw new Error('No file provided');
+        const {
+            data: { user },
+            error: userError,
+        } = await supabase.auth.getUser();
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) throw new Error('User not authenticated');
+        if (userError || !user) {
+            throw new Error('User not authenticated');
+        }
 
-    // Validácia súboru
-    const allowedTypes = [
-      'application/pdf',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'text/plain',
-    ];
-    
-    if (!allowedTypes.includes(file.type)) {
-      throw new Error('Invalid file type. Only PDF, DOCX, and TXT files are supported.');
-    }
+        const userId = user.id;
+        const uploadResults: {
+            fileName: string;
+            success: boolean;
+            publicUrl?: string;
+            filePath?: string;
+            size?: number;
+            type?: string;
+            documentId?: string;
+            error?: string;
+        }[] = [];
 
-    const maxSize = 50 * 1024 * 1024; // 50MB
-    if (file.size > maxSize) {
-      throw new Error('File too large. Maximum size is 50MB.');
-    }
+        for (const file of files) {
+            try {
+                const base64Data = file.data.split(',')[1];
+                const byteCharacters = Buffer.from(base64Data, 'base64');
 
-    // Generovanie unique file path
-    const timestamp = Date.now();
-    const randomString = Math.random().toString(36).substring(7);
-    const fileExtension = file.name.split('.').pop();
-    const fileName = `${user.id}/${timestamp}-${randomString}.${fileExtension}`;
+                const timestamp = Date.now();
+                const safeFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+                const filePath = `${userId}/${folder}/${timestamp}_${safeFileName}`;
+                
+                const { error: uploadError } = await supabase.storage
+                    .from('documents')
+                    .upload(filePath, byteCharacters, {
+                        contentType: file.type,
+                        upsert: false,
+                    });
 
-    // Upload do Supabase Storage
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('documents')
-      .upload(fileName, file, {
-        cacheControl: '3600',
-        upsert: false,
-      });
+                if (uploadError) {
+                    throw new Error(`Failed to upload ${file.name}: ${uploadError.message}`);
+                }
 
-    if (uploadError) throw new Error(`Upload error: ${uploadError.message}`);
+                const { data: urlData } = supabase.storage
+                    .from('documents')
+                    .getPublicUrl(filePath);
 
-    // Získanie public URL
-    const { data: { publicUrl } } = supabase.storage
-      .from('documents')
-      .getPublicUrl(fileName);
+                const { data: docRecord, error: docError } = await supabase
+                    .from('processed_documents')
+                    .insert({
+                        user_id: userId,
+                        name: safeFileName,
+                        status: 'processed',
+                        chunks_count: 0,
+                        metadata: { originalFileName: file.name, size: file.size, type: file.type },
+                    })
+                    .select()
+                    .maybeSingle();
 
-    // Vytvorenie záznamu v databáze
-    const { data: documentRecord, error: dbError } = await supabase
-      .from('processed_documents')
-      .insert({
-        user_id: user.id,
-        name: file.name,
-        type: fileExtension,
-        size: file.size,
-        storage_path: fileName,
-        public_url: publicUrl,
-        status: 'uploading',
-        metadata: {
-          originalName: file.name,
-          mimeType: file.type,
-          uploadedAt: new Date().toISOString(),
-        },
-      })
-      .select()
-      .single();
+                if (docError || !docRecord) {
+                    throw new Error(`Failed to register document in database: ${docError?.message}`);
+                }
 
-    if (dbError) throw new Error(`Database error: ${dbError.message}`);
+                uploadResults.push({
+                    fileName: file.name,
+                    success: true,
+                    publicUrl: urlData.publicUrl,
+                    filePath,
+                    size: file.size,
+                    type: file.type,
+                    documentId: docRecord.id,
+                });
+            } catch (error) {
+                uploadResults.push({
+                    fileName: file.name,
+                    success: false,
+                    error: error instanceof Error ? error.message : 'Unknown error',
+                });
+            }
+        }
 
-    // Spustenie spracovania dokumentu na pozadí (async)
-    processAndEmbedDocument({
-      documentId: documentRecord.id,
-      filePath: fileName,
-      fileName: file.name,
-    }).catch((error) => {
-      console.error('Background processing error:', error);
-      // Error je už zachytený v processAndEmbedDocument
+        const failedUploads = uploadResults.filter((r) => !r.success);
+        if (failedUploads.length > 0) {
+            throw new Error(
+                `Failed to upload ${failedUploads.length} file(s): ${failedUploads
+                    .map((f) => f.fileName)
+                    .join(', ')}`
+            );
+        }
+
+        return {
+            success: true,
+            message: `Successfully uploaded ${uploadResults.length} file(s)`,
+            results: uploadResults,
+        };
     });
 
-    return {
-      success: true,
-      document: documentRecord,
-      message: 'Document uploaded successfully. Processing in background...',
-    };
+export const getUserFilesAction = authenticatedAction
+    .schema(userFilesSchema)
+    .action(async () => {
+        const supabase = await createClient();
 
-  } catch (error) {
-    console.error('Upload error:', error);
-    throw new Error(
-      error instanceof Error ? error.message : 'Upload failed'
-    );
-  }
-}
+        const {
+            data: { user },
+            error: userError,
+        } = await supabase.auth.getUser();
 
-export async function getUserFilesAction() {
-  const supabase = await createClient();
+        if (userError || !user) {
+            throw new Error('User not authenticated');
+        }
 
-  try {
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) throw new Error('User not authenticated');
+        const userId = user.id;
 
-    const { data: files, error: filesError } = await supabase
-      .from('processed_documents')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
+        const { data: docs, error: docsError } = await supabase
+            .from('processed_documents')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false });
 
-    if (filesError) throw new Error(`Error fetching files: ${filesError.message}`);
+        if (docsError) {
+            throw new Error(`Failed to fetch documents: ${docsError.message}`);
+        }
 
-    return { files: files || [] };
+        const { data: storageFiles, error: storageError } = await supabase.storage
+            .from('documents')
+            .list(`${userId}/documents`, {
+                limit: 100,
+                offset: 0,
+                sortBy: { column: 'created_at', order: 'desc' },
+            });
 
-  } catch (error) {
-    console.error('Error fetching user files:', error);
-    throw new Error(
-      error instanceof Error ? error.message : 'Failed to fetch files'
-    );
-  }
-}
+        if (storageError) {
+            console.warn('Warning: failed to list storage files', storageError.message);
+        }
 
-export async function deleteDocumentAction(documentId: string) {
-  const supabase = await createClient();
+        const filesWithUrls = (docs || []).map((doc) => {
+            const storageFile = storageFiles?.find((f) => f.name.includes(doc.name));
+            return {
+                id: doc.id,
+                name: doc.name,
+                title: doc.name,
+                filePath: storageFile ? `${userId}/documents/${storageFile.name}` : undefined,
+                publicUrl: storageFile
+                    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/documents/${userId}/documents/${storageFile.name}`
+                    : undefined,
+                created_at: doc.created_at,
+                updated_at: doc.updated_at,
+                status: doc.status,
+                chunks_count: doc.chunks_count,
+                size: doc.metadata?.size || 0,
+                type: doc.metadata?.type || 'UNKNOWN',
+            };
+        });
 
-  try {
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) throw new Error('User not authenticated');
+        return { files: filesWithUrls };
+    });
 
-    // Získanie dokumentu pre overenie vlastníctva a storage path
-    const { data: document, error: docError } = await supabase
-      .from('processed_documents')
-      .select('storage_path, user_id')
-      .eq('id', documentId)
-      .single();
+export const deleteFileAction = authenticatedAction
+    .schema(deleteFileSchema)
+    .action(async ({ parsedInput: { filePath } }) => {
+        const supabase = await createClient();
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError || !user) throw new Error('User not authenticated');
 
-    if (docError || !document) throw new Error('Document not found');
-    if (document.user_id !== user.id) throw new Error('Unauthorized');
+        const userId = user.id;
+        if (!filePath.startsWith(`${userId}/`)) throw new Error('Access denied');
 
-    // Vymazanie zo storage
-    const { error: storageError } = await supabase.storage
-      .from('documents')
-      .remove([document.storage_path]);
+        const { error: storageError } = await supabase.storage
+            .from('documents')
+            .remove([filePath]);
 
-    if (storageError) {
-      console.error('Storage deletion error:', storageError);
-    }
+        if (storageError) throw new Error(`Failed to delete file from storage: ${storageError.message}`);
 
-    // Vymazanie chunks z Pinecone
-    try {
-      const { getPineconeClient, PINECONE_INDEX_NAME, PINECONE_NAMESPACE } = 
-        await import('@/lib/pinecone');
-      
-      const pinecone = await getPineconeClient();
-      const index = pinecone.index(PINECONE_INDEX_NAME);
-      
-      // Vymazanie všetkých chunks tohto dokumentu
-      await index.namespace(PINECONE_NAMESPACE).deleteMany({
-        documentId: documentId,
-      });
-    } catch (pineconeError) {
-      console.error('Pinecone deletion error:', pineconeError);
-    }
+        const fileName = filePath.split('/').pop();
+        const { error: docError } = await supabase
+            .from('processed_documents')
+            .delete()
+            .eq('user_id', userId)
+            .eq('name', fileName);
 
-    // Vymazanie z databázy (cascade delete sa postará o chunks a chats)
-    const { error: deleteError } = await supabase
-      .from('processed_documents')
-      .delete()
-      .eq('id', documentId);
+        if (docError) {
+            console.warn('Warning: failed to delete document record', docError.message);
+        }
 
-    if (deleteError) throw new Error(`Delete error: ${deleteError.message}`);
+        return { success: true, message: 'File deleted successfully' };
+    });
 
-    return { success: true, message: 'Document deleted successfully' };
+export const getFileDetailsAction = authenticatedAction
+    .schema(deleteFileSchema)
+    .action(async ({ parsedInput: { filePath } }) => {
+        const supabase = await createClient();
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError || !user) throw new Error('User not authenticated');
 
-  } catch (error) {
-    console.error('Delete error:', error);
-    throw new Error(
-      error instanceof Error ? error.message : 'Failed to delete document'
-    );
-  }
-}
+        const userId = user.id;
+        if (!filePath.startsWith(`${userId}/`)) throw new Error('Access denied');
+
+        const { data: fileDetails } = supabase.storage
+            .from('documents')
+            .getPublicUrl(filePath);
+
+        return {
+            publicUrl: fileDetails.publicUrl,
+            filePath,
+        };
+    });
