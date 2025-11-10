@@ -1,7 +1,7 @@
-// actions/uploadActions.ts - Enhanced version
 'use server';
 
 import { createClient } from '@/supabase/server';
+import { processAndEmbedDocument } from './processDocumentActions';
 
 export async function uploadDocumentAction(formData: FormData) {
   const supabase = await createClient();

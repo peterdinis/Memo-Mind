@@ -1,9 +1,7 @@
-// actions/processDocumentActions.ts
 'use server';
 
 import { OpenAIEmbeddings } from '@langchain/openai';
-import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
-import { Document } from 'langchain/document';
+import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { getPineconeClient, PINECONE_INDEX_NAME, PINECONE_NAMESPACE } from '@/lib/pinecone';
 import { createClient } from '@/supabase/server';
 import mammoth from 'mammoth';
@@ -21,27 +19,23 @@ export async function processAndEmbedDocument(input: ProcessDocumentInput) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) throw new Error('User not authenticated');
 
-    // Aktualizujte status na processing
     await supabase
       .from('processed_documents')
       .update({ status: 'processing' })
       .eq('id', input.documentId);
 
-    // 1. Stiahnutie súboru zo storage
     const { data: fileData, error: fileError } = await supabase.storage
       .from('documents')
       .download(input.filePath);
 
     if (fileError) throw new Error(`File download error: ${fileError.message}`);
 
-    // 2. Extrakcia textu
     const text = await extractTextFromFile(fileData, input.fileName);
     
     if (!text || text.trim().length < 50) {
       throw new Error('Insufficient text content extracted from document');
     }
-
-    // 3. Rozdelenie textu na chunks
+    
     const textSplitter = new RecursiveCharacterTextSplitter({
       chunkSize: 1000,
       chunkOverlap: 200,

@@ -50,7 +50,7 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect, Suspense } from 'react';
 import UploadCard from '../documents/UploadCard';
 import { useAction } from 'next-safe-action/hooks';
-import { getUserFilesAction, deleteFileAction } from '@/actions/uploadActions';
+import { getUserFilesAction } from '@/actions/uploadActions';
 import { toast } from 'sonner';
 import { Spinner } from '@/components/ui/spinner';
 
