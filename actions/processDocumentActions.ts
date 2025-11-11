@@ -1,193 +1,165 @@
 'use server';
 
-import { OpenAIEmbeddings } from '@langchain/openai';
-import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
-import {
-    getPineconeClient,
-    PINECONE_INDEX_NAME,
-    PINECONE_NAMESPACE,
-} from '@/lib/pinecone';
+import { authenticatedAction } from '@/lib/next-safe-action';
 import { createClient } from '@/supabase/server';
-import mammoth from 'mammoth';
+import { z } from 'zod';
 
-interface ProcessDocumentInput {
-    documentId: string;
-    filePath: string;
-    fileName: string;
-}
-
-export async function processAndEmbedDocument(input: ProcessDocumentInput) {
+export const chatWithDocument = authenticatedAction
+  .inputSchema(z.object({
+    documentId: z.string(),
+    question: z.string().min(1, 'Question cannot be empty'),
+  }))
+  .action(async ({ parsedInput: { documentId, question } }) => {
     const supabase = await createClient();
 
-    try {
-        const {
-            data: { user },
-            error: authError,
-        } = await supabase.auth.getUser();
-        if (authError || !user) throw new Error('User not authenticated');
+    // Verify document access and status
+    const { data: document, error: docError } = await supabase
+      .from('processed_documents')
+      .select('*')
+      .eq('id', documentId)
+      .single();
 
-        await supabase
-            .from('processed_documents')
-            .update({ status: 'processing' })
-            .eq('id', input.documentId);
-
-        const { data: fileData, error: fileError } = await supabase.storage
-            .from('documents')
-            .download(input.filePath);
-
-        if (fileError)
-            throw new Error(`File download error: ${fileError.message}`);
-
-        const text = await extractTextFromFile(fileData, input.fileName);
-
-        if (!text || text.trim().length < 50) {
-            throw new Error(
-                'Insufficient text content extracted from document',
-            );
-        }
-
-        // Rozdelenie textu na chunks
-        const textSplitter = new RecursiveCharacterTextSplitter({
-            chunkSize: 1000,
-            chunkOverlap: 200,
-        });
-
-        const docs = await textSplitter.createDocuments([text]);
-
-        console.log(`Created ${docs.length} chunks from document`);
-
-        // Inicializácia embeddings
-        const embeddings = new OpenAIEmbeddings({
-            openAIApiKey: process.env.OPENAI_API_KEY,
-            modelName: 'text-embedding-3-small', // Updated to newer model
-        });
-
-        // Uloženie chunks do Supabase
-        const chunkRecords = docs.map((doc, index) => ({
-            document_id: input.documentId,
-            user_id: user.id,
-            content: doc.pageContent,
-            chunk_index: index,
-            metadata: {
-                fileName: input.fileName,
-                chunkSize: doc.pageContent.length,
-                totalChunks: docs.length,
-            },
-        }));
-
-        const { error: chunksError } = await supabase
-            .from('document_chunks')
-            .insert(chunkRecords);
-
-        if (chunksError)
-            throw new Error(`Error saving chunks: ${chunksError.message}`);
-
-        // Vytvorenie embeddings a uloženie do Pinecone
-        const pinecone = await getPineconeClient();
-        const index = pinecone.index(PINECONE_INDEX_NAME);
-
-        // Spracovanie v dávkach (batch processing)
-        const batchSize = 100;
-        for (let i = 0; i < docs.length; i += batchSize) {
-            const batchDocs = docs.slice(i, i + batchSize);
-            const batchTexts = batchDocs.map((doc) => doc.pageContent);
-
-            // Vytvorenie embeddings pre batch
-            const batchEmbeddings = await embeddings.embedDocuments(batchTexts);
-
-            // Príprava vektorov pre Pinecone
-            const vectors = batchDocs.map((doc, idx) => ({
-                id: `${input.documentId}-chunk-${i + idx}`,
-                values: batchEmbeddings[idx],
-                metadata: {
-                    documentId: input.documentId,
-                    userId: user.id,
-                    chunkIndex: i + idx,
-                    text: doc.pageContent,
-                    fileName: input.fileName,
-                    timestamp: new Date().toISOString(),
-                },
-            }));
-
-            // Upsert do Pinecone
-            await index.namespace(PINECONE_NAMESPACE).upsert(vectors);
-
-            console.log(
-                `Processed batch ${Math.floor(i / batchSize) + 1} of ${Math.ceil(docs.length / batchSize)}`,
-            );
-        }
-
-        // Aktualizácia dokumentu - status processed
-        await supabase
-            .from('processed_documents')
-            .update({
-                status: 'processed',
-                processed_at: new Date().toISOString(),
-                chunks_count: docs.length,
-                metadata: {
-                    textLength: text.length,
-                    chunksCount: docs.length,
-                    embeddingsModel: 'text-embedding-3-small',
-                },
-            })
-            .eq('id', input.documentId);
-
-        return {
-            success: true,
-            chunksCount: docs.length,
-            message: `Document processed successfully with ${docs.length} chunks`,
-        };
-    } catch (error) {
-        console.error('Error processing document:', error);
-
-        // Aktualizácia statusu na error
-        await supabase
-            .from('processed_documents')
-            .update({
-                status: 'error',
-                metadata: {
-                    error:
-                        error instanceof Error
-                            ? error.message
-                            : 'Unknown error',
-                    timestamp: new Date().toISOString(),
-                },
-            })
-            .eq('id', input.documentId);
-
-        throw error;
+    if (docError || !document) {
+      throw new Error('Document not found');
     }
+
+    if (document.status !== 'processed') {
+      throw new Error('Document is still processing. Please wait until processing is complete.');
+    }
+
+    if (document.chunks_count === 0) {
+      throw new Error('Document has no processed content. Please re-upload the document.');
+    }
+
+    // Generate RAG response
+    const response = await generateRAGResponse(documentId, question, document.name);
+
+    // Save to chat history
+    const { error: chatError } = await supabase
+      .from('document_chats')
+      .insert({
+        document_id: documentId,
+        user_message: question,
+        assistant_response: response,
+      });
+
+    if (chatError) {
+      console.error('Failed to save chat history:', chatError);
+    }
+
+    return { response };
+  });
+
+async function generateRAGResponse(documentId: string, question: string, documentTitle: string) {
+  try {
+    // 1. Create embedding for the question
+    const questionEmbedding = await createEmbedding(question);
+    
+    // 2. Search for relevant chunks in Pinecone
+    const relevantChunks = await searchPinecone(documentId, questionEmbedding, 5);
+    
+    if (relevantChunks.length === 0) {
+      return "I couldn't find any relevant information in the document to answer your question. The document might not contain information related to your query.";
+    }
+
+    // 3. Create context from relevant chunks
+    const context = relevantChunks.map(chunk => chunk.text).join('\n\n');
+
+    // 4. Generate response using OpenAI Chat Completion
+    const response = await generateChatResponse(question, context, documentTitle);
+    
+    return response;
+  } catch (error) {
+    console.error('RAG response error:', error);
+    throw new Error('Failed to generate response from document. Please try again.');
+  }
 }
 
-async function extractTextFromFile(
-    fileData: Blob,
-    fileName: string,
-): Promise<string> {
-    const fileExtension = fileName.split('.').pop()?.toLowerCase();
+// Create single embedding
+async function createEmbedding(text: string): Promise<number[]> {
+  const response = await fetch('https://api.openai.com/v1/embeddings', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'text-embedding-ada-002',
+      input: text,
+    }),
+  });
 
-    try {
-        if (fileExtension === 'txt') {
-            return await fileData.text();
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`OpenAI API error: ${response.status} ${response.statusText} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  return data.data[0].embedding;
+}
+
+// Search Pinecone
+async function searchPinecone(documentId: string, embedding: number[], topK: number = 5) {
+  const { Pinecone } = await import('@pinecone-database/pinecone');
+  const pinecone = new Pinecone({
+    apiKey: process.env.PINECONE_API_KEY!,
+  });
+  
+  const index = pinecone.Index(process.env.PINECONE_INDEX_NAME!);
+
+  const results = await index.namespace(documentId).query({
+    vector: embedding,
+    topK,
+    includeMetadata: true,
+  });
+
+  return results.matches
+    .filter(match => match.score && match.score > 0.7) // Filter by similarity score
+    .map(match => ({
+      text: match.metadata?.text as string,
+      score: match.score,
+    }));
+}
+
+// Generate chat response using OpenAI
+async function generateChatResponse(question: string, context: string, documentTitle: string) {
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-3.5-turbo',
+      messages: [
+        {
+          role: 'system',
+          content: `You are an AI assistant analyzing the document: "${documentTitle}"
+
+Based STRICTLY on the provided context from the document, please answer the user's question. Follow these rules:
+1. Only use information from the provided context
+2. If the context doesn't contain enough information to answer fully, say so and mention what information IS available
+3. Do not make up information or use external knowledge
+4. Be precise and helpful`
+        },
+        {
+          role: 'user',
+          content: `Context from the document:
+${context}
+
+User Question: ${question}`
         }
+      ],
+      temperature: 0.1,
+      max_tokens: 1000,
+    }),
+  });
 
-        if (fileExtension === 'pdf') {
-            // Dynamický import pre pdf-parse
-            const pdfParse = (await import('pdf-parse')).default;
-            const arrayBuffer = await fileData.arrayBuffer();
-            const buffer = Buffer.from(arrayBuffer);
-            const data = await pdfParse(buffer);
-            return data.text;
-        }
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`OpenAI API error: ${response.status} ${response.statusText} - ${errorText}`);
+  }
 
-        if (fileExtension === 'docx') {
-            const arrayBuffer = await fileData.arrayBuffer();
-            const result = await mammoth.extractRawText({ arrayBuffer });
-            return result.value;
-        }
-
-        throw new Error(`Unsupported file type: ${fileExtension}`);
-    } catch (error) {
-        console.error('Text extraction error:', error);
-        throw new Error(`Failed to extract text from ${fileExtension} file`);
-    }
+  const data = await response.json();
+  return data.choices[0].message.content;
 }

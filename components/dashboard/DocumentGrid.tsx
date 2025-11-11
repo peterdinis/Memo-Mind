@@ -93,7 +93,7 @@ interface FileFromAPI {
     last_accessed_at?: string;
     metadata?: any;
     size: number;
-    publicUrl: string;
+    publicUrl?: string;
 }
 
 export function DocumentGrid() {
@@ -140,19 +140,20 @@ export function DocumentGrid() {
         },
     );
 
-    const transformFilesData = (files: FileFromAPI[]): Document[] => {
-        return files.map((file, index) => ({
-            id: file.id || `file-${index}`,
-            name: file.name,
-            originalName: file.originalName || file.name,
-            publicUrl: file.publicUrl,
-            size: file.size || 0,
-            created_at: file.created_at || new Date().toISOString(),
-            filePath: file.originalName || file.name,
-            type: getFileType(file.name),
-            status: 'processed' as const,
-        }));
-    };
+   const transformFilesData = (files: FileFromAPI[]): Document[] => {
+    return files.map((file, index) => ({
+        id: file.id || `file-${index}`,
+        name: file.name,
+        originalName: file.originalName || file.name,
+        publicUrl: file.publicUrl || '', // Provide a fallback empty string
+        size: file.size || 0,
+        created_at: file.created_at || new Date().toISOString(),
+        filePath: file.originalName || file.name,
+        type: getFileType(file.name),
+        status: 'processed' as const,
+    }));
+};
+
 
     useEffect(() => {
         fetchFiles({});
