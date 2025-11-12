@@ -1,3 +1,4 @@
+// components/dashboard/chat/ChatWrapper.tsx
 'use client';
 
 import { useState, useRef, useEffect, useId } from 'react';
@@ -38,7 +39,7 @@ import {
 import { toast } from 'sonner';
 import { Spinner } from '@/components/ui/spinner';
 import { getUserFilesAction } from '@/actions/uploadActions';
-import { retryDocumentProcessing } from '@/actions/documentActions';
+import { getDocumentStatus, retryDocumentProcessing } from '@/actions/documentActions';
 
 type DocumentType = 'PDF' | 'DOCX' | 'TXT' | 'IMAGE' | 'OTHER';
 type DocumentStatus = 'uploading' | 'processing' | 'processed' | 'error';
@@ -109,6 +110,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [isMonitoring, setIsMonitoring] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     // Načítanie všetkých dokumentov
@@ -138,7 +140,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
 
                     if (docToSelect) {
                         setSelectedDocument(docToSelect);
-                        loadChatHistory(docToSelect.id);
+                        loadChatHistory(docToSelect.id, docToSelect.title);
                     } else {
                         setMessages([
                             {
@@ -207,12 +209,11 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
         retryDocumentProcessing,
         {
             onSuccess: (result) => {
-                if (result.data?.success) {
-                    toast.success(result.data.message || 'Document processing restarted');
-                    // Refresh documents after a delay to show updated status
-                    setTimeout(() => {
-                        fetchFiles({});
-                    }, 2000);
+                if (result) {
+                    toast.success('Document processing restarted');
+                    setIsMonitoring(true);
+                    // Spustite monitoring
+                    startStatusMonitoring();
                 }
             },
             onError: (error) => {
@@ -222,8 +223,63 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
         },
     );
 
+    // Funkcia na kontrolu stavu dokumentu
+    const checkDocumentStatus = async (docId: string) => {
+        try {
+            const result = await getDocumentStatus(docId);
+            return result.document;
+        } catch (error) {
+            console.error('Error checking document status:', error);
+            return null;
+        }
+    };
+
+    // Monitoring stavu dokumentov
+    const startStatusMonitoring = () => {
+        if (!selectedDocument) return;
+
+        const interval = setInterval(async () => {
+            try {
+                const currentStatus = await checkDocumentStatus(selectedDocument.id);
+                if (currentStatus) {
+                    console.log(`Document status: ${currentStatus.status}, chunks: ${currentStatus.chunks_count}`);
+                    
+                    if (currentStatus.status !== 'processing') {
+                        // Stav sa zmenil, obnovte dokumenty
+                        fetchFiles({});
+                        setIsMonitoring(false);
+                        clearInterval(interval);
+                        
+                        if (currentStatus.status === 'processed') {
+                            toast.success('Document processing completed!');
+                        } else if (currentStatus.status === 'error') {
+                            toast.error('Document processing failed');
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error during status monitoring:', error);
+            }
+        }, 3000); // Kontrola každých 3 sekundy
+
+        // Auto-stop monitoring po 2 minútach
+        setTimeout(() => {
+            clearInterval(interval);
+            setIsMonitoring(false);
+        }, 120000);
+
+        return () => clearInterval(interval);
+    };
+
+    // Spustite monitoring pri zmene selectedDocument
+    useEffect(() => {
+        if (selectedDocument && selectedDocument.status === 'processing') {
+            startStatusMonitoring();
+        }
+    }, [selectedDocument]);
+
     // Načítanie chat histórie
-    const loadChatHistory = async (docId: string) => {
+    const loadChatHistory = async (docId: string, documentTitle?: string) => {
         try {
             const result = await getDocumentChatHistory(docId);
             if (result.chatHistory) {
@@ -243,29 +299,39 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                         },
                     ],
                 );
-                
-                console.log(selectedDocument, "Selected Document")
 
                 if (historyMessages.length === 0) {
+                    const title = documentTitle || selectedDocument?.title || 'the document';
                     setMessages([
                         {
                             id: `welcome-${uniqueId}`,
                             role: 'assistant',
-                            content: `Hello! I'm ready to help you analyze "${selectedDocument?.title}". What would you like to know about this document?`,
+                            content: `Hello! I'm ready to help you analyze "${title}". What would you like to know about this document?`,
                             timestamp: new Date(),
                         },
                     ]);
                 } else {
                     setMessages(historyMessages);
                 }
+            } else {
+                const title = documentTitle || selectedDocument?.title || 'the document';
+                setMessages([
+                    {
+                        id: `welcome-${uniqueId}`,
+                        role: 'assistant',
+                        content: `Hello! I'm ready to help you analyze "${title}". What would you like to know about this document?`,
+                        timestamp: new Date(),
+                    },
+                ]);
             }
         } catch (error) {
             console.error('Failed to load chat history:', error);
+            const title = documentTitle || selectedDocument?.title || 'the document';
             setMessages([
                 {
                     id: `welcome-error-${uniqueId}`,
                     role: 'assistant',
-                    content: `Hello! I'm ready to help you analyze "${selectedDocument?.title}". What would you like to know about this document?`,
+                    content: `Hello! I'm ready to help you analyze "${title}". What would you like to know about this document?`,
                     timestamp: new Date(),
                 },
             ]);
@@ -441,6 +507,11 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
         }
     };
 
+    const handleDocumentSelect = (doc: Document) => {
+        setSelectedDocument(doc);
+        loadChatHistory(doc.id, doc.title);
+    };
+
     const renderDocumentContent = (doc: Document) => {
         return (
             <div className="h-full flex flex-col">
@@ -457,7 +528,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                         e.stopPropagation();
                                         handleRetryProcessing(doc);
                                     }}
-                                    disabled={isRetrying}
+                                    disabled={isRetrying || isMonitoring}
                                 >
                                     <RefreshCw className={`h-4 w-4 ${isRetrying ? 'animate-spin' : ''}`} />
                                     {isRetrying ? 'Retrying...' : 'Retry Processing'}
@@ -484,6 +555,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                     <p className="text-muted-foreground text-sm">
                         {doc.type} document - {doc.size}
                         {doc.chunks_count && doc.chunks_count > 0 ? ` - ${doc.chunks_count} chunks processed` : ' - No chunks available'}
+                        {isMonitoring && ' - Monitoring processing status...'}
                     </p>
                 </div>
                 <ScrollArea className="flex-1">
@@ -528,7 +600,12 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                                         )}
                                                     </>
                                                 ) : doc.status === 'processing' ? (
-                                                    "The document is currently being processed. Please wait..."
+                                                    <>
+                                                        The document is currently being processed. Please wait...
+                                                        {isMonitoring && (
+                                                            <><br />Monitoring processing status... <RefreshCw className="inline h-4 w-4 animate-spin" /></>
+                                                        )}
+                                                    </>
                                                 ) : doc.status === 'uploading' ? (
                                                     "The document is being uploaded..."
                                                 ) : (
@@ -541,7 +618,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                                 <Button
                                                     className="mt-4"
                                                     onClick={() => handleRetryProcessing(doc)}
-                                                    disabled={isRetrying}
+                                                    disabled={isRetrying || isMonitoring}
                                                     variant={doc.status === 'error' ? 'destructive' : 'outline'}
                                                 >
                                                     <RefreshCw className={`mr-2 h-4 w-4 ${isRetrying ? 'animate-spin' : ''}`} />
@@ -664,10 +741,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                                 ? 'border-primary bg-muted'
                                                 : 'border-transparent'
                                         }`}
-                                        onClick={() => {
-                                            setSelectedDocument(doc);
-                                            loadChatHistory(doc.id);
-                                        }}
+                                        onClick={() => handleDocumentSelect(doc)}
                                     >
                                         <div className="flex items-start justify-between">
                                             <div className="flex items-center gap-2">
@@ -708,7 +782,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                                             e.stopPropagation();
                                                             handleRetryProcessing(doc);
                                                         }}
-                                                        disabled={isRetrying}
+                                                        disabled={isRetrying || isMonitoring}
                                                         title="Retry processing"
                                                     >
                                                         <RefreshCw className={`h-3 w-3 ${isRetrying ? 'animate-spin' : ''}`} />
