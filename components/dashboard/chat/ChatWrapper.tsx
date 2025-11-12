@@ -18,6 +18,7 @@ import {
     Download,
     Share2,
     Trash2,
+    RefreshCw,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import {
@@ -37,6 +38,7 @@ import {
 import { toast } from 'sonner';
 import { Spinner } from '@/components/ui/spinner';
 import { getUserFilesAction } from '@/actions/uploadActions';
+import { retryDocumentProcessing } from '@/actions/documentActions';
 
 type DocumentType = 'PDF' | 'DOCX' | 'TXT' | 'IMAGE' | 'OTHER';
 type DocumentStatus = 'uploading' | 'processing' | 'processed' | 'error';
@@ -200,6 +202,26 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
         },
     });
 
+    // Retry processing action
+    const { execute: executeRetryProcessing, isPending: isRetrying } = useAction(
+        retryDocumentProcessing,
+        {
+            onSuccess: (result) => {
+                if (result.data?.success) {
+                    toast.success(result.data.message || 'Document processing restarted');
+                    // Refresh documents after a delay to show updated status
+                    setTimeout(() => {
+                        fetchFiles({});
+                    }, 2000);
+                }
+            },
+            onError: (error) => {
+                const errorMessage = getErrorMessage(error);
+                toast.error(`Failed to retry processing: ${errorMessage}`);
+            },
+        },
+    );
+
     // Načítanie chat histórie
     const loadChatHistory = async (docId: string) => {
         try {
@@ -221,6 +243,8 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                         },
                     ],
                 );
+                
+                console.log(selectedDocument, "Selected Document")
 
                 if (historyMessages.length === 0) {
                     setMessages([
@@ -288,6 +312,11 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
         }));
     };
 
+    // Retry processing function
+    const handleRetryProcessing = async (doc: Document) => {
+        await executeRetryProcessing({ documentId: doc.id });
+    };
+
     // Načítanie dokumentov pri mount
     useEffect(() => {
         fetchFiles({});
@@ -335,6 +364,17 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
 
     const handleSendMessage = async () => {
         if (!input.trim() || !selectedDocument) return;
+
+        // Better validation
+        if (selectedDocument.status !== 'processed') {
+            toast.error(`Document is ${selectedDocument.status}. Please wait until processing is complete.`);
+            return;
+        }
+
+        if (selectedDocument.chunks_count === 0) {
+            toast.error('This document has no processed content available for AI analysis. Please use the "Retry Processing" button or re-upload the document.');
+            return;
+        }
 
         const userMessage: Message = {
             id: `user-${Date.now()}-${uniqueId}`,
@@ -404,10 +444,25 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
     const renderDocumentContent = (doc: Document) => {
         return (
             <div className="h-full flex flex-col">
-                <div className="border-b p-4 flex-shrink-0">
+                <div className="border-b p-4 shrink-0">
                     <div className="flex items-center justify-between">
                         <h3 className="font-semibold">Document Preview</h3>
                         <div className="flex gap-2">
+                            {/* Retry button for documents with errors or no chunks */}
+                            {(doc.status === 'error' || doc.chunks_count === 0) && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleRetryProcessing(doc);
+                                    }}
+                                    disabled={isRetrying}
+                                >
+                                    <RefreshCw className={`h-4 w-4 ${isRetrying ? 'animate-spin' : ''}`} />
+                                    {isRetrying ? 'Retrying...' : 'Retry Processing'}
+                                </Button>
+                            )}
                             <Button
                                 variant="outline"
                                 size="sm"
@@ -428,7 +483,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                     </div>
                     <p className="text-muted-foreground text-sm">
                         {doc.type} document - {doc.size}
-                        {doc.chunks_count && ` - ${doc.chunks_count} chunks processed`}
+                        {doc.chunks_count && doc.chunks_count > 0 ? ` - ${doc.chunks_count} chunks processed` : ' - No chunks available'}
                     </p>
                 </div>
                 <ScrollArea className="flex-1">
@@ -445,7 +500,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                             <p>Size: {doc.size}</p>
                                             <p>Uploaded: {doc.uploadedAt}</p>
                                             <p>Status: {doc.status}</p>
-                                            {doc.chunks_count && (
+                                            {doc.chunks_count && doc.chunks_count > 0 && (
                                                 <p>Processed chunks: {doc.chunks_count}</p>
                                             )}
                                         </div>
@@ -458,11 +513,17 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                                 <br />
                                                 {doc.status === 'processed' ? (
                                                     <>
-                                                        The document is processed and ready for AI analysis.
-                                                        {doc.chunks_count && (
+                                                        {doc.chunks_count && doc.chunks_count > 0 ? (
                                                             <>
+                                                                The document is processed and ready for AI analysis.
                                                                 <br />
                                                                 {doc.chunks_count} text chunks are available for questioning.
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                ⚠️ Document is marked as processed but has no text chunks available.
+                                                                <br />
+                                                                You can try to retry processing or re-upload the document.
                                                             </>
                                                         )}
                                                     </>
@@ -474,10 +535,25 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                                     "There was an error processing this document. Please try uploading again."
                                                 )}
                                             </p>
+                                            
+                                            {/* Retry button in preview for problematic documents */}
+                                            {(doc.status === 'error' || (doc.status === 'processed' && doc.chunks_count === 0)) && (
+                                                <Button
+                                                    className="mt-4"
+                                                    onClick={() => handleRetryProcessing(doc)}
+                                                    disabled={isRetrying}
+                                                    variant={doc.status === 'error' ? 'destructive' : 'outline'}
+                                                >
+                                                    <RefreshCw className={`mr-2 h-4 w-4 ${isRetrying ? 'animate-spin' : ''}`} />
+                                                    {isRetrying ? 'Retrying Processing...' : 'Retry Document Processing'}
+                                                </Button>
+                                            )}
+                                            
                                             <Button
-                                                className="mt-4"
+                                                className="mt-4 ml-2"
                                                 onClick={(e) => handleDownloadDocument(doc, e)}
                                                 disabled={!doc.publicUrl || doc.publicUrl === '#'}
+                                                variant="secondary"
                                             >
                                                 <Download className="mr-2 h-4 w-4" />
                                                 Download Full Document
@@ -617,14 +693,28 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                             >
                                                 {doc.status}
                                             </Badge>
-                                            {doc.chunks_count && doc.status === 'processed' && (
-                                                <Badge
-                                                    variant="outline"
-                                                    className="text-xs"
-                                                >
-                                                    {doc.chunks_count} chunks
-                                                </Badge>
-                                            )}
+                                            <div className="flex gap-1">
+                                                {doc.chunks_count && doc.chunks_count > 0 && doc.status === 'processed' && (
+                                                    <Badge variant="outline" className="text-xs">
+                                                        {doc.chunks_count} chunks
+                                                    </Badge>
+                                                )}
+                                                {(doc.status === 'error' || doc.chunks_count === 0) && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-6 w-6 p-0"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleRetryProcessing(doc);
+                                                        }}
+                                                        disabled={isRetrying}
+                                                        title="Retry processing"
+                                                    >
+                                                        <RefreshCw className={`h-3 w-3 ${isRetrying ? 'animate-spin' : ''}`} />
+                                                    </Button>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
@@ -776,7 +866,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                             </div>
                         </div>
 
-                        {selectedDocument && selectedDocument.status === 'processed' && messages.length <= 1 && (
+                        {selectedDocument && selectedDocument.status === 'processed' && selectedDocument.chunks_count && selectedDocument.chunks_count > 0 && messages.length <= 1 && (
                             <div className="px-6 pb-4">
                                 <p className="text-muted-foreground mb-3 text-sm">
                                     Try asking about this document:
@@ -805,13 +895,13 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                     onKeyDown={handleKeyDown}
                                     placeholder={
                                         selectedDocument
-                                            ? selectedDocument.status === 'processed'
+                                            ? selectedDocument.status === 'processed' && selectedDocument.chunks_count && selectedDocument.chunks_count > 0
                                                 ? `Ask about ${selectedDocument.title}...`
                                                 : `Document is ${selectedDocument.status}...`
                                             : 'Select a document to start chatting...'
                                     }
                                     className="flex-1"
-                                    disabled={!selectedDocument || selectedDocument.status !== 'processed' || isLoading || isChatLoading}
+                                    disabled={!selectedDocument || selectedDocument.status !== 'processed' || !selectedDocument.chunks_count || selectedDocument.chunks_count === 0 || isLoading || isChatLoading}
                                 />
                                 <Button
                                     onClick={handleSendMessage}
@@ -819,6 +909,8 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                         !input.trim() ||
                                         !selectedDocument ||
                                         selectedDocument.status !== 'processed' ||
+                                        !selectedDocument.chunks_count ||
+                                        selectedDocument.chunks_count === 0 ||
                                         isLoading ||
                                         isChatLoading
                                     }
