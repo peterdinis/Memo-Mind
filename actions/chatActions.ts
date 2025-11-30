@@ -3,6 +3,12 @@
 import { authenticatedAction } from '@/lib/next-safe-action';
 import { createClient } from '@/supabase/server';
 import { z } from 'zod';
+import { ChatOpenAI } from '@langchain/openai';
+import { PineconeStore } from '@langchain/pinecone';
+import { getPineconeIndex } from '@/lib/pinecone';
+import { OpenAIEmbeddings } from '@langchain/openai';
+import { ChatPromptTemplate } from '@langchain/core/prompts';
+import { Document } from '@langchain/core/documents';
 
 export const chatWithDocument = authenticatedAction
   .inputSchema(z.object({
@@ -27,135 +33,96 @@ export const chatWithDocument = authenticatedAction
       throw new Error('Document is still processing. Please wait until processing is complete.');
     }
 
-    if (document.chunks_count === 0) {
-      throw new Error('Document has no processed content. Please re-upload the document.');
-    }
-
-    // Generate RAG response
-    const response = await generateRAGResponse(documentId, question, document.name);
-
-    // Save to chat history
-    const { error: chatError } = await supabase
-      .from('document_chats')
-      .insert({
-        document_id: documentId,
-        user_message: question,
-        assistant_response: response,
+    try {
+      // 1. Initialize Vector Store
+      const embeddings = new OpenAIEmbeddings({
+        openAIApiKey: process.env.OPENAI_API_KEY,
       });
 
-    if (chatError) {
-      console.error('Failed to save chat history:', chatError);
-    }
+      const pineconeIndex = await getPineconeIndex();
 
-    return { response };
-  });
+      const vectorStore = await PineconeStore.fromExistingIndex(embeddings, {
+        pineconeIndex,
+        namespace: documentId, // Search only within this document
+      });
 
-async function generateRAGResponse(documentId: string, question: string, documentTitle: string) {
-  try {
-    // 1. Create embedding for the question
-    const questionEmbedding = await createEmbedding(question);
-    
-    // 2. Search for relevant chunks in Pinecone
-    const relevantChunks = await searchPinecone(documentId, questionEmbedding, 5);
-    
-    if (relevantChunks.length === 0) {
-      return "I couldn't find any relevant information in the document to answer your question. The document might not contain information related to your query.";
-    }
+      // 2. Create Retriever
+      const retriever = vectorStore.asRetriever({
+        k: 5, // Retrieve top 5 chunks
+      });
 
-    // 3. Create context from relevant chunks
-    const context = relevantChunks.map(chunk => chunk.text).join('\n\n');
+      // 3. Create Chat Model
+      const chatModel = new ChatOpenAI({
+        modelName: 'gpt-3.5-turbo',
+        temperature: 0.1,
+        openAIApiKey: process.env.OPENAI_API_KEY,
+      });
 
-    // 4. Generate response using OpenAI Chat Completion
-    const response = await generateChatResponse(question, context, documentTitle);
-    
-    return response;
-  } catch (error) {
-    console.error('RAG response error:', error);
-    throw new Error('Failed to generate response from document. Please try again.');
-  }
-}
+      // 4. Create Prompt Template
+      const prompt = ChatPromptTemplate.fromTemplate(`
+        You are an AI assistant analyzing the document: "{document_title}"
+        
+        Answer the user's question based STRICTLY on the following context from the document:
+        <context>
+        {context}
+        </context>
 
-// Create single embedding
-async function createEmbedding(text: string): Promise<number[]> {
-  const response = await fetch('https://api.openai.com/v1/embeddings', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'text-embedding-ada-002',
-      input: text,
-    }),
-  });
+        User Question: {input}
+        
+        If the answer is not in the context, say so. Do not make up information.
+      `);
 
-  if (!response.ok) {
-    throw new Error(`OpenAI API error: ${response.statusText}`);
-  }
+      // 5. Create Chain
+      const { StringOutputParser } = await import('@langchain/core/output_parsers');
+      const { RunnableSequence } = await import('@langchain/core/runnables');
 
-  const data = await response.json();
-  return data.data[0].embedding;
-}
+      // Helper to format documents
+      const formatDocs = (docs: Document[]) => {
+        return docs.map((doc) => doc.pageContent).join('\n\n');
+      };
 
-// Search Pinecone
-async function searchPinecone(documentId: string, embedding: number[], topK: number = 5) {
-  const { Pinecone } = await import('@pinecone-database/pinecone');
-  const pinecone = new Pinecone({
-    apiKey: process.env.PINECONE_API_KEY!,
-  });
-  
-  const index = pinecone.Index(process.env.PINECONE_INDEX_NAME!);
+      type ChainInput = {
+        question: string;
+        document_title: string;
+      };
 
-  const results = await index.namespace(documentId).query({
-    vector: embedding,
-    topK,
-    includeMetadata: true,
-  });
-
-  return results.matches.map(match => ({
-    text: match.metadata?.text as string,
-    score: match.score,
-  }));
-}
-
-// Generate chat response using OpenAI
-async function generateChatResponse(question: string, context: string, documentTitle: string) {
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'gpt-3.5-turbo',
-      messages: [
+      const chain = RunnableSequence.from([
         {
-          role: 'system',
-          content: `You are an AI assistant analyzing the document: "${documentTitle}"
-
-Based STRICTLY on the provided context from the document, please answer the user's question. Follow these rules:
-1. Only use information from the provided context
-2. If the context doesn't contain enough information to answer fully, say so and mention what information IS available
-3. Do not make up information or use external knowledge
-4. Be precise and helpful`
+          context: async (input: ChainInput) => {
+            const relevantDocs = await retriever.invoke(input.question);
+            return formatDocs(relevantDocs);
+          },
+          question: (input: ChainInput) => input.question,
+          document_title: (input: ChainInput) => input.document_title,
         },
-        {
-          role: 'user',
-          content: `Context from the document:
-${context}
+        prompt,
+        chatModel,
+        new StringOutputParser(),
+      ]);
 
-User Question: ${question}`
-        }
-      ],
-      temperature: 0.1,
-      max_tokens: 1000,
-    }),
+      // 6. Generate Response
+      const response = await chain.invoke({
+        question: question,
+        document_title: document.name,
+      });
+
+      // 7. Save to chat history
+      const { error: chatError } = await supabase
+        .from('document_chats')
+        .insert({
+          document_id: documentId,
+          user_message: question,
+          assistant_response: response,
+        });
+
+      if (chatError) {
+        console.error('Failed to save chat history:', chatError);
+      }
+
+      return { response };
+
+    } catch (error) {
+      console.error('Chat error:', error);
+      throw new Error('Failed to generate response. Please try again.');
+    }
   });
-
-  if (!response.ok) {
-    throw new Error(`OpenAI API error: ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  return data.choices[0].message.content;
-}

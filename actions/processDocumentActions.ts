@@ -3,163 +3,145 @@
 import { authenticatedAction } from '@/lib/next-safe-action';
 import { createClient } from '@/supabase/server';
 import { z } from 'zod';
+import { PDFLoader } from '@langchain/community/document_loaders/fs/pdf';
+import { DocxLoader } from '@langchain/community/document_loaders/fs/docx';
+import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
+import { OpenAIEmbeddings } from '@langchain/openai';
+import { PineconeStore } from '@langchain/pinecone';
+import { Document } from '@langchain/core/documents';
+import { getPineconeIndex } from '@/lib/pinecone';
+import fs from 'fs/promises';
+import path from 'path';
+import os from 'os';
 
-export const chatWithDocument = authenticatedAction
+// Manual TextLoader implementation since it's missing in @langchain/community
+class TextLoader {
+  constructor(public filePath: string) { }
+  async load(): Promise<Document[]> {
+    const text = await fs.readFile(this.filePath, 'utf-8');
+    return [new Document({ pageContent: text, metadata: { source: this.filePath } })];
+  }
+}
+
+export const processDocumentAction = authenticatedAction
   .inputSchema(z.object({
     documentId: z.string(),
-    question: z.string().min(1, 'Question cannot be empty'),
+    filePath: z.string(),
+    fileName: z.string(),
   }))
-  .action(async ({ parsedInput: { documentId, question } }) => {
+  .action(async ({ parsedInput: { documentId, filePath, fileName } }) => {
     const supabase = await createClient();
 
-    // Verify document access and status
-    const { data: document, error: docError } = await supabase
-      .from('processed_documents')
-      .select('*')
-      .eq('id', documentId)
-      .single();
+    try {
+      // Update status to processing
+      await supabase
+        .from('processed_documents')
+        .update({
+          status: 'processing',
+          metadata: {
+            processingStartedAt: new Date().toISOString()
+          }
+        })
+        .eq('id', documentId);
 
-    if (docError || !document) {
-      throw new Error('Document not found');
-    }
+      // 1. Download file from Supabase Storage
+      const { data: fileData, error: downloadError } = await supabase.storage
+        .from('documents')
+        .download(filePath);
 
-    if (document.status !== 'processed') {
-      throw new Error('Document is still processing. Please wait until processing is complete.');
-    }
+      if (downloadError || !fileData) {
+        throw new Error(`Failed to download file: ${downloadError?.message}`);
+      }
 
-    if (document.chunks_count === 0) {
-      throw new Error('Document has no processed content. Please re-upload the document.');
-    }
+      // Save to temp file
+      const tempDir = os.tmpdir();
+      const tempFilePath = path.join(tempDir, `processing_${documentId}_${fileName}`);
+      const buffer = Buffer.from(await fileData.arrayBuffer());
+      await fs.writeFile(tempFilePath, buffer);
 
-    // Generate RAG response
-    const response = await generateRAGResponse(documentId, question, document.name);
+      // 2. Load document using LangChain loaders
+      let docs;
+      const fileExtension = fileName.split('.').pop()?.toLowerCase();
 
-    // Save to chat history
-    const { error: chatError } = await supabase
-      .from('document_chats')
-      .insert({
-        document_id: documentId,
-        user_message: question,
-        assistant_response: response,
+      try {
+        if (fileExtension === 'pdf') {
+          const loader = new PDFLoader(tempFilePath);
+          docs = await loader.load();
+        } else if (fileExtension === 'docx') {
+          const loader = new DocxLoader(tempFilePath);
+          docs = await loader.load();
+        } else if (fileExtension === 'txt') {
+          const loader = new TextLoader(tempFilePath);
+          docs = await loader.load();
+        } else {
+          throw new Error(`Unsupported file type: ${fileExtension}`);
+        }
+      } finally {
+        // Clean up temp file
+        await fs.unlink(tempFilePath).catch(console.error);
+      }
+
+      // 3. Split text into chunks
+      const splitter = new RecursiveCharacterTextSplitter({
+        chunkSize: 1000,
+        chunkOverlap: 200,
       });
 
-    if (chatError) {
-      console.error('Failed to save chat history:', chatError);
-    }
+      const chunks = await splitter.splitDocuments(docs);
 
-    return { response };
-  });
-
-async function generateRAGResponse(documentId: string, question: string, documentTitle: string) {
-  try {
-    // 1. Create embedding for the question
-    const questionEmbedding = await createEmbedding(question);
-    
-    // 2. Search for relevant chunks in Pinecone
-    const relevantChunks = await searchPinecone(documentId, questionEmbedding, 5);
-    
-    if (relevantChunks.length === 0) {
-      return "I couldn't find any relevant information in the document to answer your question. The document might not contain information related to your query.";
-    }
-
-    // 3. Create context from relevant chunks
-    const context = relevantChunks.map(chunk => chunk.text).join('\n\n');
-
-    // 4. Generate response using OpenAI Chat Completion
-    const response = await generateChatResponse(question, context, documentTitle);
-    
-    return response;
-  } catch (error) {
-    console.error('RAG response error:', error);
-    throw new Error('Failed to generate response from document. Please try again.');
-  }
-}
-
-// Create single embedding
-async function createEmbedding(text: string): Promise<number[]> {
-  const response = await fetch('https://api.openai.com/v1/embeddings', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'text-embedding-ada-002',
-      input: text,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`OpenAI API error: ${response.status} ${response.statusText} - ${errorText}`);
-  }
-
-  const data = await response.json();
-  return data.data[0].embedding;
-}
-
-// Search Pinecone
-async function searchPinecone(documentId: string, embedding: number[], topK: number = 5) {
-  const { Pinecone } = await import('@pinecone-database/pinecone');
-  const pinecone = new Pinecone({
-    apiKey: process.env.PINECONE_API_KEY!,
-  });
-  
-  const index = pinecone.Index(process.env.PINECONE_INDEX_NAME!);
-
-  const results = await index.namespace(documentId).query({
-    vector: embedding,
-    topK,
-    includeMetadata: true,
-  });
-
-  return results.matches
-    .filter(match => match.score && match.score > 0.7) // Filter by similarity score
-    .map(match => ({
-      text: match.metadata?.text as string,
-      score: match.score,
-    }));
-}
-
-// Generate chat response using OpenAI
-async function generateChatResponse(question: string, context: string, documentTitle: string) {
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'gpt-3.5-turbo',
-      messages: [
-        {
-          role: 'system',
-          content: `You are an AI assistant analyzing the document: "${documentTitle}"
-
-Based STRICTLY on the provided context from the document, please answer the user's question. Follow these rules:
-1. Only use information from the provided context
-2. If the context doesn't contain enough information to answer fully, say so and mention what information IS available
-3. Do not make up information or use external knowledge
-4. Be precise and helpful`
-        },
-        {
-          role: 'user',
-          content: `Context from the document:
-${context}
-
-User Question: ${question}`
+      // Add metadata to chunks
+      const chunksWithMetadata = chunks.map((chunk: Document) => ({
+        ...chunk,
+        metadata: {
+          ...chunk.metadata,
+          documentId,
+          fileName,
         }
-      ],
-      temperature: 0.1,
-      max_tokens: 1000,
-    }),
+      }));
+
+      // 4. Generate embeddings and store in Pinecone
+      const embeddings = new OpenAIEmbeddings({
+        openAIApiKey: process.env.OPENAI_API_KEY,
+      });
+
+      const pineconeIndex = await getPineconeIndex();
+
+      await PineconeStore.fromDocuments(chunksWithMetadata, embeddings, {
+        pineconeIndex,
+        namespace: documentId, // Use documentId as namespace for easy deletion/filtering
+      });
+
+      // 5. Update status to processed
+      await supabase
+        .from('processed_documents')
+        .update({
+          status: 'processed',
+          chunks_count: chunks.length,
+          metadata: {
+            processedAt: new Date().toISOString(),
+            processingTime: 'Done', // You could calculate actual time
+            pageCount: docs.length,
+          }
+        })
+        .eq('id', documentId);
+
+      return { success: true, message: 'Document processed successfully' };
+
+    } catch (error) {
+      console.error('Processing error:', error);
+
+      // Update status to error
+      await supabase
+        .from('processed_documents')
+        .update({
+          status: 'error',
+          metadata: {
+            error: error instanceof Error ? error.message : 'Unknown processing error',
+            processedAt: new Date().toISOString()
+          }
+        })
+        .eq('id', documentId);
+
+      throw error;
+    }
   });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`OpenAI API error: ${response.status} ${response.statusText} - ${errorText}`);
-  }
-
-  const data = await response.json();
-  return data.choices[0].message.content;
-}

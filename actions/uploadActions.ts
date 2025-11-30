@@ -7,64 +7,11 @@ import {
     userFilesSchema,
 } from '@/schemas/uploadSchemas';
 import { createClient } from '@/supabase/server';
+import { processDocumentAction } from '@/actions/processDocumentActions';
 import z from 'zod';
 
-// Add the missing processDocumentAction
-export const processDocumentAction = authenticatedAction
-    .inputSchema(z.object({
-        documentId: z.string(),
-        filePath: z.string(),
-        fileName: z.string(),
-    }))
-    .action(async ({ parsedInput: { documentId, filePath, fileName } }) => {
-        const supabase = await createClient();
-        
-        try {
-            // Update status to processing
-            await supabase
-                .from('processed_documents')
-                .update({ 
-                    status: 'processing',
-                    metadata: {
-                        processingStartedAt: new Date().toISOString()
-                    }
-                })
-                .eq('id', documentId);
+// processDocumentAction is now imported from @/actions/processDocumentActions
 
-            // Here you would add your document processing logic
-            // For now, we'll simulate processing and mark as completed
-            await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate processing
-            
-            // Update status to processed
-            await supabase
-                .from('processed_documents')
-                .update({ 
-                    status: 'processed',
-                    chunks_count: 1, // Simulate having chunks
-                    metadata: {
-                        processedAt: new Date().toISOString(),
-                        processingTime: '2 seconds'
-                    }
-                })
-                .eq('id', documentId);
-
-            return { success: true, message: 'Document processed successfully' };
-        } catch (error) {
-            // Update status to error
-            await supabase
-                .from('processed_documents')
-                .update({ 
-                    status: 'error',
-                    metadata: {
-                        error: error instanceof Error ? error.message : 'Unknown processing error',
-                        processedAt: new Date().toISOString()
-                    }
-                })
-                .eq('id', documentId);
-            
-            throw error;
-        }
-    });
 
 export const uploadFileAction = authenticatedAction
     .inputSchema(uploadFileSchema)
@@ -194,10 +141,10 @@ export const uploadFileAction = authenticatedAction
 
         const failedUploads = uploadResults.filter((r) => !r.success);
         if (failedUploads.length > 0) {
-            const errorMessage = failedUploads.length === uploadResults.length 
+            const errorMessage = failedUploads.length === uploadResults.length
                 ? `Failed to upload all ${failedUploads.length} file(s)`
                 : `Failed to upload ${failedUploads.length} of ${uploadResults.length} file(s)`;
-            
+
             throw new Error(
                 `${errorMessage}: ${failedUploads
                     .map((f) => `${f.fileName} (${f.error})`)
@@ -211,12 +158,12 @@ export const uploadFileAction = authenticatedAction
             results: uploadResults,
         };
     });
-    
+
 // Background processing function - FIXED
-async function processDocumentInBackground(params: { 
-    documentId: string; 
-    filePath: string; 
-    fileName: string; 
+async function processDocumentInBackground(params: {
+    documentId: string;
+    filePath: string;
+    fileName: string;
 }) {
     try {
         // Directly call the action without dynamic import
@@ -228,11 +175,11 @@ async function processDocumentInBackground(params: {
     } catch (error) {
         console.error('Background processing error:', error);
         const supabase = await createClient();
-        
+
         // Update document status to error
         await supabase
             .from('processed_documents')
-            .update({ 
+            .update({
                 status: 'error',
                 metadata: {
                     error: error instanceof Error ? error.message : 'Unknown processing error',
@@ -330,7 +277,7 @@ export const deleteFileAction = authenticatedAction
             data: { user },
             error: userError,
         } = await supabase.auth.getUser();
-        
+
         if (userError || !user) {
             throw new Error('User not authenticated');
         }
@@ -381,16 +328,16 @@ export const deleteFileAction = authenticatedAction
                 }
             }
 
-            return { 
-                success: true, 
-                message: 'File deleted successfully' 
+            return {
+                success: true,
+                message: 'File deleted successfully'
             };
 
         } catch (error) {
             console.error('Delete file error:', error);
             throw new Error(
-                error instanceof Error 
-                    ? error.message 
+                error instanceof Error
+                    ? error.message
                     : 'Failed to delete file'
             );
         }
@@ -404,13 +351,13 @@ export const getFileDetailsAction = authenticatedAction
             data: { user },
             error: userError,
         } = await supabase.auth.getUser();
-        
+
         if (userError || !user) {
             throw new Error('User not authenticated');
         }
 
         const userId = user.id;
-        
+
         if (!filePath.startsWith(`${userId}/`)) {
             throw new Error('Access denied');
         }
@@ -428,7 +375,7 @@ export const getFileDetailsAction = authenticatedAction
 // Helper function to get file type from MIME type
 function getFileTypeFromMime(mimeType: string | undefined): string {
     if (!mimeType) return 'UNKNOWN';
-    
+
     const typeMap: { [key: string]: string } = {
         'application/pdf': 'PDF',
         'text/plain': 'TXT',
