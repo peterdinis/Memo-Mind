@@ -93,7 +93,9 @@ interface FileFromAPI {
     last_accessed_at?: string;
     metadata?: any;
     size: number;
-    publicUrl: string;
+    publicUrl?: string;
+    filePath?: string;
+    status?: string;
 }
 
 export function DocumentGrid() {
@@ -145,14 +147,30 @@ export function DocumentGrid() {
             id: file.id || `file-${index}`,
             name: file.name,
             originalName: file.originalName || file.name,
-            publicUrl: file.publicUrl,
+            publicUrl: file.publicUrl || '',
             size: file.size || 0,
             created_at: file.created_at || new Date().toISOString(),
-            filePath: file.originalName || file.name,
+            filePath: file.filePath || file.metadata?.filePath || file.originalName || file.name,
             type: getFileType(file.name),
-            status: 'processed' as const,
+            status: getStatusFromAPI(file.status),
         }));
     };
+
+    function getStatusFromAPI(status: string | undefined): 'processing' | 'processed' | 'error' {
+        switch (status) {
+            case 'processing':
+            case 'uploading':
+                return 'processing';
+            case 'processed':
+            case 'completed':
+                return 'processed';
+            case 'error':
+            case 'failed':
+                return 'error';
+            default:
+                return 'processed';
+        }
+    }
 
     useEffect(() => {
         fetchFiles({});
@@ -203,6 +221,11 @@ export function DocumentGrid() {
     const handleQuickDownload = (doc: Document, e: React.MouseEvent) => {
         e.stopPropagation();
 
+        if (!doc.publicUrl) {
+            toast.error('Download URL not available');
+            return;
+        }
+
         const link = document.createElement('a');
         link.href = doc.publicUrl;
         link.download = doc.name;
@@ -216,6 +239,11 @@ export function DocumentGrid() {
 
     const handleQuickShare = (doc: Document, e: React.MouseEvent) => {
         e.stopPropagation();
+
+        if (!doc.publicUrl) {
+            toast.error('Share URL not available');
+            return;
+        }
 
         navigator.clipboard.writeText(doc.publicUrl).then(() => {
             setCopied(true);
@@ -272,6 +300,17 @@ export function DocumentGrid() {
         setDeleteDialogOpen(true);
     };
 
+    const handleDeleteConfirm = () => {
+        if (selectedDoc) {
+            deleteFile({ 
+                documentId: selectedDoc.id,
+                filePath: selectedDoc.filePath as unknown as string 
+            });
+        }
+        setDeleteDialogOpen(false);
+        setSelectedDoc(null);
+    };
+
     const handleShareClick = (doc: Document, e: React.MouseEvent) => {
         e.stopPropagation();
         setSelectedDoc(doc);
@@ -282,14 +321,6 @@ export function DocumentGrid() {
         e.stopPropagation();
         setSelectedDoc(doc);
         setDownloadDialogOpen(true);
-    };
-
-    const handleDeleteConfirm = () => {
-        if (selectedDoc && selectedDoc.filePath) {
-            deleteFile({ filePath: selectedDoc.filePath });
-        }
-        setDeleteDialogOpen(false);
-        setSelectedDoc(null);
     };
 
     const handleShareConfirm = () => {
@@ -304,7 +335,7 @@ export function DocumentGrid() {
     };
 
     const handleDownloadConfirm = () => {
-        if (selectedDoc) {
+        if (selectedDoc && selectedDoc.publicUrl) {
             const link = document.createElement('a');
             link.href = selectedDoc.publicUrl;
             link.download = selectedDoc.name;
@@ -314,19 +345,23 @@ export function DocumentGrid() {
             document.body.removeChild(link);
 
             toast.success(`Downloading ${selectedDoc.name}`);
+        } else {
+            toast.error('Download URL not available');
         }
         setDownloadDialogOpen(false);
         setSelectedDoc(null);
     };
 
     const copyShareLink = () => {
-        if (selectedDoc) {
+        if (selectedDoc && selectedDoc.publicUrl) {
             const shareUrl = selectedDoc.publicUrl;
             navigator.clipboard.writeText(shareUrl).then(() => {
                 setCopied(true);
                 setTimeout(() => setCopied(false), 2000);
                 toast.success('Link copied to clipboard');
             });
+        } else {
+            toast.error('Share URL not available');
         }
     };
 
@@ -733,13 +768,14 @@ export function DocumentGrid() {
                             <div className='flex items-center space-x-2'>
                                 <div className='bg-muted flex-1 overflow-hidden rounded-md border px-3 py-2 text-sm'>
                                     <span className='truncate'>
-                                        {selectedDoc?.publicUrl || ''}
+                                        {selectedDoc?.publicUrl || 'URL not available'}
                                     </span>
                                 </div>
                                 <Button
                                     size='sm'
                                     className='px-3'
                                     onClick={copyShareLink}
+                                    disabled={!selectedDoc?.publicUrl}
                                 >
                                     {copied ? (
                                         <CheckCircle2 className='h-4 w-4' />
@@ -777,7 +813,10 @@ export function DocumentGrid() {
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDownloadConfirm}>
+                        <AlertDialogAction 
+                            onClick={handleDownloadConfirm}
+                            disabled={!selectedDoc?.publicUrl}
+                        >
                             Download
                         </AlertDialogAction>
                     </AlertDialogFooter>

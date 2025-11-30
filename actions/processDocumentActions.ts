@@ -1,175 +1,147 @@
 'use server';
 
-import { OpenAIEmbeddings } from '@langchain/openai';
-import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
-import { getPineconeClient, PINECONE_INDEX_NAME, PINECONE_NAMESPACE } from '@/lib/pinecone';
+import { authenticatedAction } from '@/lib/next-safe-action';
 import { createClient } from '@/supabase/server';
-import mammoth from 'mammoth';
+import { z } from 'zod';
+import { PDFLoader } from '@langchain/community/document_loaders/fs/pdf';
+import { DocxLoader } from '@langchain/community/document_loaders/fs/docx';
+import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
+import { OpenAIEmbeddings } from '@langchain/openai';
+import { PineconeStore } from '@langchain/pinecone';
+import { Document } from '@langchain/core/documents';
+import { getPineconeIndex } from '@/lib/pinecone';
+import fs from 'fs/promises';
+import path from 'path';
+import os from 'os';
 
-interface ProcessDocumentInput {
-  documentId: string;
-  filePath: string;
-  fileName: string;
+// Manual TextLoader implementation since it's missing in @langchain/community
+class TextLoader {
+  constructor(public filePath: string) { }
+  async load(): Promise<Document[]> {
+    const text = await fs.readFile(this.filePath, 'utf-8');
+    return [new Document({ pageContent: text, metadata: { source: this.filePath } })];
+  }
 }
 
-export async function processAndEmbedDocument(input: ProcessDocumentInput) {
-  const supabase = await createClient();
-  
-  try {
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) throw new Error('User not authenticated');
+export const processDocumentAction = authenticatedAction
+  .inputSchema(z.object({
+    documentId: z.string(),
+    filePath: z.string(),
+    fileName: z.string(),
+  }))
+  .action(async ({ parsedInput: { documentId, filePath, fileName } }) => {
+    const supabase = await createClient();
 
-    await supabase
-      .from('processed_documents')
-      .update({ status: 'processing' })
-      .eq('id', input.documentId);
+    try {
+      // Update status to processing
+      await supabase
+        .from('processed_documents')
+        .update({
+          status: 'processing',
+          metadata: {
+            processingStartedAt: new Date().toISOString()
+          }
+        })
+        .eq('id', documentId);
 
-    const { data: fileData, error: fileError } = await supabase.storage
-      .from('documents')
-      .download(input.filePath);
+      // 1. Download file from Supabase Storage
+      const { data: fileData, error: downloadError } = await supabase.storage
+        .from('documents')
+        .download(filePath);
 
-    if (fileError) throw new Error(`File download error: ${fileError.message}`);
-    
-    const text = await extractTextFromFile(fileData, input.fileName);
-    
-    if (!text || text.trim().length < 50) {
-      throw new Error('Insufficient text content extracted from document');
-    }
+      if (downloadError || !fileData) {
+        throw new Error(`Failed to download file: ${downloadError?.message}`);
+      }
 
-    // Rozdelenie textu na chunks
-    const textSplitter = new RecursiveCharacterTextSplitter({
-      chunkSize: 1000,
-      chunkOverlap: 200,
-    });
+      // Save to temp file
+      const tempDir = os.tmpdir();
+      const tempFilePath = path.join(tempDir, `processing_${documentId}_${fileName}`);
+      const buffer = Buffer.from(await fileData.arrayBuffer());
+      await fs.writeFile(tempFilePath, buffer);
 
-    const docs = await textSplitter.createDocuments([text]);
-    
-    console.log(`Created ${docs.length} chunks from document`);
-    
-    // Inicializácia embeddings
-    const embeddings = new OpenAIEmbeddings({
-      openAIApiKey: process.env.OPENAI_API_KEY,
-      modelName: 'text-embedding-3-small', // Updated to newer model
-    });
+      // 2. Load document using LangChain loaders
+      let docs;
+      const fileExtension = fileName.split('.').pop()?.toLowerCase();
 
-    // Uloženie chunks do Supabase
-    const chunkRecords = docs.map((doc, index) => ({
-      document_id: input.documentId,
-      user_id: user.id,
-      content: doc.pageContent,
-      chunk_index: index,
-      metadata: {
-        fileName: input.fileName,
-        chunkSize: doc.pageContent.length,
-        totalChunks: docs.length,
-      },
-    }));
+      try {
+        if (fileExtension === 'pdf') {
+          const loader = new PDFLoader(tempFilePath);
+          docs = await loader.load();
+        } else if (fileExtension === 'docx') {
+          const loader = new DocxLoader(tempFilePath);
+          docs = await loader.load();
+        } else if (fileExtension === 'txt') {
+          const loader = new TextLoader(tempFilePath);
+          docs = await loader.load();
+        } else {
+          throw new Error(`Unsupported file type: ${fileExtension}`);
+        }
+      } finally {
+        // Clean up temp file
+        await fs.unlink(tempFilePath).catch(console.error);
+      }
 
-    const { error: chunksError } = await supabase
-      .from('document_chunks')
-      .insert(chunkRecords);
+      // 3. Split text into chunks
+      const splitter = new RecursiveCharacterTextSplitter({
+        chunkSize: 1000,
+        chunkOverlap: 200,
+      });
 
-    if (chunksError) throw new Error(`Error saving chunks: ${chunksError.message}`);
+      const chunks = await splitter.splitDocuments(docs);
 
-    // Vytvorenie embeddings a uloženie do Pinecone
-    const pinecone = await getPineconeClient();
-    const index = pinecone.index(PINECONE_INDEX_NAME);
-
-    // Spracovanie v dávkach (batch processing)
-    const batchSize = 100;
-    for (let i = 0; i < docs.length; i += batchSize) {
-      const batchDocs = docs.slice(i, i + batchSize);
-      const batchTexts = batchDocs.map(doc => doc.pageContent);
-      
-      // Vytvorenie embeddings pre batch
-      const batchEmbeddings = await embeddings.embedDocuments(batchTexts);
-      
-      // Príprava vektorov pre Pinecone
-      const vectors = batchDocs.map((doc, idx) => ({
-        id: `${input.documentId}-chunk-${i + idx}`,
-        values: batchEmbeddings[idx],
+      // Add metadata to chunks
+      const chunksWithMetadata = chunks.map((chunk: Document) => ({
+        ...chunk,
         metadata: {
-          documentId: input.documentId,
-          userId: user.id,
-          chunkIndex: i + idx,
-          text: doc.pageContent,
-          fileName: input.fileName,
-          timestamp: new Date().toISOString(),
-        },
+          ...chunk.metadata,
+          documentId,
+          fileName,
+        }
       }));
 
-      // Upsert do Pinecone
-      await index.namespace(PINECONE_NAMESPACE).upsert(vectors);
-      
-      console.log(`Processed batch ${Math.floor(i / batchSize) + 1} of ${Math.ceil(docs.length / batchSize)}`);
+      // 4. Generate embeddings and store in Pinecone
+      const embeddings = new OpenAIEmbeddings({
+        openAIApiKey: process.env.OPENAI_API_KEY,
+      });
+
+      const pineconeIndex = await getPineconeIndex();
+
+      await PineconeStore.fromDocuments(chunksWithMetadata, embeddings, {
+        pineconeIndex,
+        namespace: documentId, // Use documentId as namespace for easy deletion/filtering
+      });
+
+      // 5. Update status to processed
+      await supabase
+        .from('processed_documents')
+        .update({
+          status: 'processed',
+          chunks_count: chunks.length,
+          metadata: {
+            processedAt: new Date().toISOString(),
+            processingTime: 'Done', // You could calculate actual time
+            pageCount: docs.length,
+          }
+        })
+        .eq('id', documentId);
+
+      return { success: true, message: 'Document processed successfully' };
+
+    } catch (error) {
+      console.error('Processing error:', error);
+
+      // Update status to error
+      await supabase
+        .from('processed_documents')
+        .update({
+          status: 'error',
+          metadata: {
+            error: error instanceof Error ? error.message : 'Unknown processing error',
+            processedAt: new Date().toISOString()
+          }
+        })
+        .eq('id', documentId);
+
+      throw error;
     }
-
-    // Aktualizácia dokumentu - status processed
-    await supabase
-      .from('processed_documents')
-      .update({
-        status: 'processed',
-        processed_at: new Date().toISOString(),
-        chunks_count: docs.length,
-        metadata: {
-          textLength: text.length,
-          chunksCount: docs.length,
-          embeddingsModel: 'text-embedding-3-small',
-        },
-      })
-      .eq('id', input.documentId);
-
-    return {
-      success: true,
-      chunksCount: docs.length,
-      message: `Document processed successfully with ${docs.length} chunks`,
-    };
-
-  } catch (error) {
-    console.error('Error processing document:', error);
-    
-    // Aktualizácia statusu na error
-    await supabase
-      .from('processed_documents')
-      .update({
-        status: 'error',
-        metadata: {
-          error: error instanceof Error ? error.message : 'Unknown error',
-          timestamp: new Date().toISOString(),
-        },
-      })
-      .eq('id', input.documentId);
-
-    throw error;
-  }
-}
-
-async function extractTextFromFile(fileData: Blob, fileName: string): Promise<string> {
-  const fileExtension = fileName.split('.').pop()?.toLowerCase();
-
-  try {
-    if (fileExtension === 'txt') {
-      return await fileData.text();
-    }
-
-    if (fileExtension === 'pdf') {
-      // Dynamický import pre pdf-parse
-      const pdfParse = (await import('pdf-parse')).default;
-      const arrayBuffer = await fileData.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      const data = await pdfParse(buffer);
-      return data.text;
-    }
-
-    if (fileExtension === 'docx') {
-      const arrayBuffer = await fileData.arrayBuffer();
-      const result = await mammoth.extractRawText({ arrayBuffer });
-      return result.value;
-    }
-
-    throw new Error(`Unsupported file type: ${fileExtension}`);
-  } catch (error) {
-    console.error('Text extraction error:', error);
-    throw new Error(`Failed to extract text from ${fileExtension} file`);
-  }
-}
+  });

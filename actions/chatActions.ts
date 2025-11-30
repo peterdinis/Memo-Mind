@@ -1,175 +1,128 @@
 'use server';
 
-import { ChatOpenAI, OpenAIEmbeddings } from '@langchain/openai';
-import { StringOutputParser } from '@langchain/core/output_parsers';
-import { PromptTemplate } from '@langchain/core/prompts';
-import { RunnableSequence } from '@langchain/core/runnables';
+import { authenticatedAction } from '@/lib/next-safe-action';
 import { createClient } from '@/supabase/server';
-import { getPineconeClient, PINECONE_INDEX_NAME, PINECONE_NAMESPACE } from '@/lib/pinecone';
+import { z } from 'zod';
+import { ChatOpenAI } from '@langchain/openai';
+import { PineconeStore } from '@langchain/pinecone';
+import { getPineconeIndex } from '@/lib/pinecone';
+import { OpenAIEmbeddings } from '@langchain/openai';
+import { ChatPromptTemplate } from '@langchain/core/prompts';
+import { Document } from '@langchain/core/documents';
 
-export async function chatWithDocument(documentId: string, userMessage: string) {
-  const supabase = await createClient();
+export const chatWithDocument = authenticatedAction
+  .inputSchema(z.object({
+    documentId: z.string(),
+    question: z.string().min(1, 'Question cannot be empty'),
+  }))
+  .action(async ({ parsedInput: { documentId, question } }) => {
+    const supabase = await createClient();
 
-  try {
-    if (!documentId) throw new Error('No document ID provided');
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) throw new Error('User not authenticated');
-
-    // Získanie dokumentu
+    // Verify document access and status
     const { data: document, error: docError } = await supabase
       .from('processed_documents')
       .select('*')
       .eq('id', documentId)
-      .eq('user_id', user.id)
-      .maybeSingle();
+      .single();
 
-    if (docError) throw new Error(`Database error: ${docError.message}`);
-    if (!document) throw new Error(`Document not found`);
+    if (docError || !document) {
+      throw new Error('Document not found');
+    }
+
     if (document.status !== 'processed') {
-      throw new Error(`Document is still ${document.status}. Please wait.`);
+      throw new Error('Document is still processing. Please wait until processing is complete.');
     }
 
-    // Získanie chat histórie
-    const { data: chatHistory } = await supabase
-      .from('document_chats')
-      .select('user_message, assistant_response, created_at')
-      .eq('document_id', documentId)
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: true })
-      .limit(5);
+    try {
+      // 1. Initialize Vector Store
+      const embeddings = new OpenAIEmbeddings({
+        openAIApiKey: process.env.OPENAI_API_KEY,
+      });
 
-    // 1. Vytvorenie embedding pre user query
-    const embeddings = new OpenAIEmbeddings({
-      openAIApiKey: process.env.OPENAI_API_KEY,
-      modelName: 'text-embedding-ada-002',
-    });
+      const pineconeIndex = await getPineconeIndex();
 
-    const queryEmbedding = await embeddings.embedQuery(userMessage);
+      const vectorStore = await PineconeStore.fromExistingIndex(embeddings, {
+        pineconeIndex,
+        namespace: documentId, // Search only within this document
+      });
 
-    // 2. Vyhľadanie relevantných chunks v Pinecone
-    const pinecone = await getPineconeClient();
-    const index = pinecone.index(PINECONE_INDEX_NAME);
+      // 2. Create Retriever
+      const retriever = vectorStore.asRetriever({
+        k: 5, // Retrieve top 5 chunks
+      });
 
-    const queryResponse = await index.namespace(PINECONE_NAMESPACE).query({
-      vector: queryEmbedding,
-      topK: 5, // Top 5 najrelevantnejších chunks
-      includeMetadata: true,
-      filter: {
-        documentId: { $eq: documentId },
-        userId: { $eq: user.id },
-      },
-    });
+      // 3. Create Chat Model
+      const chatModel = new ChatOpenAI({
+        modelName: 'gpt-3.5-turbo',
+        temperature: 0.1,
+        openAIApiKey: process.env.OPENAI_API_KEY,
+      });
 
-    // 3. Extrakcia relevantného kontextu
-    const relevantChunks = queryResponse.matches
-      .filter((match) => match.score && match.score > 0.7) // Len chunks s vysokou relevantnosťou
-      .map((match, idx) => {
-        const metadata = match.metadata as any;
-        return `[Chunk ${idx + 1}] (Relevance: ${(match.score! * 100).toFixed(1)}%):\n${metadata.text}`;
-      })
-      .join('\n\n---\n\n');
+      // 4. Create Prompt Template
+      const prompt = ChatPromptTemplate.fromTemplate(`
+        You are an AI assistant analyzing the document: "{document_title}"
+        
+        Answer the user's question based STRICTLY on the following context from the document:
+        <context>
+        {context}
+        </context>
 
-    if (!relevantChunks) {
-      return {
-        response: "I couldn't find relevant information in the document to answer your question. Could you try rephrasing or asking about something else in the document?",
+        User Question: {input}
+        
+        If the answer is not in the context, say so. Do not make up information.
+      `);
+
+      // 5. Create Chain
+      const { StringOutputParser } = await import('@langchain/core/output_parsers');
+      const { RunnableSequence } = await import('@langchain/core/runnables');
+
+      // Helper to format documents
+      const formatDocs = (docs: Document[]) => {
+        return docs.map((doc) => doc.pageContent).join('\n\n');
       };
+
+      type ChainInput = {
+        question: string;
+        document_title: string;
+      };
+
+      const chain = RunnableSequence.from([
+        {
+          context: async (input: ChainInput) => {
+            const relevantDocs = await retriever.invoke(input.question);
+            return formatDocs(relevantDocs);
+          },
+          question: (input: ChainInput) => input.question,
+          document_title: (input: ChainInput) => input.document_title,
+        },
+        prompt,
+        chatModel,
+        new StringOutputParser(),
+      ]);
+
+      // 6. Generate Response
+      const response = await chain.invoke({
+        question: question,
+        document_title: document.name,
+      });
+
+      // 7. Save to chat history
+      const { error: chatError } = await supabase
+        .from('document_chats')
+        .insert({
+          document_id: documentId,
+          user_message: question,
+          assistant_response: response,
+        });
+
+      if (chatError) {
+        console.error('Failed to save chat history:', chatError);
+      }
+
+      return { response };
+
+    } catch (error) {
+      console.error('Chat error:', error);
+      throw new Error('Failed to generate response. Please try again.');
     }
-
-    // 4. Generovanie odpovede pomocou LLM
-    const llm = new ChatOpenAI({
-      modelName: 'gpt-3.5-turbo',
-      temperature: 0.1,
-      maxTokens: 1500,
-    });
-
-    const prompt = PromptTemplate.fromTemplate(`
-You are an expert document analysis assistant. Answer the user's question based ONLY on the provided context from the document.
-
-DOCUMENT INFORMATION:
-- Title: {documentTitle}
-- Type: {documentType}
-- Total Chunks: {totalChunks}
-
-RELEVANT CONTEXT FROM DOCUMENT:
-{relevantContext}
-
-CONVERSATION HISTORY:
-{conversationHistory}
-
-USER QUESTION: {userQuestion}
-
-INSTRUCTIONS:
-1. Answer ONLY based on the provided context above
-2. If the context doesn't contain the answer, clearly state: "Based on the provided sections, I don't have information about this."
-3. Reference specific chunks when citing information
-4. Be precise and accurate
-5. If you need to make inferences, clearly mark them as such
-
-ANSWER:
-`);
-
-    const chain = RunnableSequence.from([
-      {
-        documentTitle: () => document.name,
-        documentType: () => document.type || 'Unknown',
-        totalChunks: () => document.chunks_count || 0,
-        relevantContext: () => relevantChunks,
-        conversationHistory: () => formatChatHistory(chatHistory || []),
-        userQuestion: () => userMessage,
-      },
-      prompt,
-      llm,
-      new StringOutputParser(),
-    ]);
-
-    const response = await chain.invoke({});
-
-    // 5. Uloženie chatu do databázy
-    await saveChatToDatabase(documentId, userMessage, response, supabase, user.id);
-
-    return { response };
-
-  } catch (error) {
-    console.error('Chat with document error:', error);
-    throw new Error(
-      error instanceof Error ? error.message : 'Failed to process chat message'
-    );
-  }
-}
-
-function formatChatHistory(chatHistory: any[]): string {
-  if (!chatHistory || chatHistory.length === 0) {
-    return 'No previous conversation.';
-  }
-
-  return chatHistory
-    .map((chat) => `USER: ${chat.user_message}\nASSISTANT: ${chat.assistant_response}`)
-    .join('\n\n');
-}
-
-async function saveChatToDatabase(
-  documentId: string,
-  userMessage: string,
-  assistantResponse: string,
-  supabase: any,
-  userId: string
-) {
-  try {
-    const { error } = await supabase.from('document_chats').insert({
-      document_id: documentId,
-      user_id: userId,
-      user_message: userMessage,
-      assistant_response: assistantResponse,
-      metadata: {
-        response_length: assistantResponse.length,
-        timestamp: new Date().toISOString(),
-        model: 'gpt-3.5-turbo',
-      },
-    });
-
-    if (error) throw error;
-  } catch (error) {
-    console.error('Error saving chat to database:', error);
-  }
-}
+  });

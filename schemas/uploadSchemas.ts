@@ -16,4 +16,5 @@ export const userFilesSchema = z.object({});
 
 export const deleteFileSchema = z.object({
     filePath: z.string(),
+    documentId: z.string()
 });
