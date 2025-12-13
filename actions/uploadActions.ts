@@ -12,7 +12,6 @@ import z from 'zod';
 
 // processDocumentAction is now imported from @/actions/processDocumentActions
 
-
 export const uploadFileAction = authenticatedAction
     .inputSchema(uploadFileSchema)
     .action(async ({ parsedInput: { files, folder } }) => {
@@ -40,19 +39,27 @@ export const uploadFileAction = authenticatedAction
         }[] = [];
 
         // Validate file types and sizes
-        const allowedTypes = ['application/pdf', 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+        const allowedTypes = [
+            'application/pdf',
+            'text/plain',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ];
         const maxSize = 10 * 1024 * 1024; // 10MB
 
         for (const file of files) {
             try {
                 // Validate file type
                 if (!allowedTypes.includes(file.type)) {
-                    throw new Error(`File type ${file.type} is not supported. Please upload PDF, TXT, or DOCX files.`);
+                    throw new Error(
+                        `File type ${file.type} is not supported. Please upload PDF, TXT, or DOCX files.`,
+                    );
                 }
 
                 // Validate file size
                 if (file.size > maxSize) {
-                    throw new Error(`File size ${(file.size / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of 10MB.`);
+                    throw new Error(
+                        `File size ${(file.size / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of 10MB.`,
+                    );
                 }
 
                 const base64Data = file.data.split(',')[1];
@@ -113,7 +120,7 @@ export const uploadFileAction = authenticatedAction
                 await processDocumentInBackground({
                     documentId: docRecord.id, // Use the actual document ID from database
                     filePath: filePath,
-                    fileName: file.name
+                    fileName: file.name,
                 });
 
                 uploadResults.push({
@@ -125,7 +132,6 @@ export const uploadFileAction = authenticatedAction
                     type: file.type,
                     documentId: docRecord.id,
                 });
-
             } catch (error) {
                 console.error(`Upload failed for ${file.name}:`, error);
                 uploadResults.push({
@@ -141,9 +147,10 @@ export const uploadFileAction = authenticatedAction
 
         const failedUploads = uploadResults.filter((r) => !r.success);
         if (failedUploads.length > 0) {
-            const errorMessage = failedUploads.length === uploadResults.length
-                ? `Failed to upload all ${failedUploads.length} file(s)`
-                : `Failed to upload ${failedUploads.length} of ${uploadResults.length} file(s)`;
+            const errorMessage =
+                failedUploads.length === uploadResults.length
+                    ? `Failed to upload all ${failedUploads.length} file(s)`
+                    : `Failed to upload ${failedUploads.length} of ${uploadResults.length} file(s)`;
 
             throw new Error(
                 `${errorMessage}: ${failedUploads
@@ -170,7 +177,7 @@ async function processDocumentInBackground(params: {
         await processDocumentAction({
             documentId: params.documentId,
             filePath: params.filePath,
-            fileName: params.fileName
+            fileName: params.fileName,
         });
     } catch (error) {
         console.error('Background processing error:', error);
@@ -182,9 +189,12 @@ async function processDocumentInBackground(params: {
             .update({
                 status: 'error',
                 metadata: {
-                    error: error instanceof Error ? error.message : 'Unknown processing error',
-                    processedAt: new Date().toISOString()
-                }
+                    error:
+                        error instanceof Error
+                            ? error.message
+                            : 'Unknown processing error',
+                    processedAt: new Date().toISOString(),
+                },
             })
             .eq('id', params.documentId);
     }
@@ -218,23 +228,29 @@ export const getUserFilesAction = authenticatedAction
         }
 
         // Get files from storage for URL generation
-        const { data: storageFiles, error: storageError } = await supabase.storage
-            .from('documents')
-            .list(`${userId}/documents`, {
-                limit: 100,
-                offset: 0,
-                sortBy: { column: 'created_at', order: 'desc' },
-            });
+        const { data: storageFiles, error: storageError } =
+            await supabase.storage
+                .from('documents')
+                .list(`${userId}/documents`, {
+                    limit: 100,
+                    offset: 0,
+                    sortBy: { column: 'created_at', order: 'desc' },
+                });
 
         if (storageError) {
-            console.warn('Warning: failed to list storage files', storageError.message);
+            console.warn(
+                'Warning: failed to list storage files',
+                storageError.message,
+            );
         }
 
         // Combine database records with storage URLs
         const filesWithUrls = (docs || []).map((doc) => {
             // Find matching storage file
-            const storageFile = storageFiles?.find((f) =>
-                f.name.includes(doc.name) || doc.metadata?.filePath?.includes(f.name)
+            const storageFile = storageFiles?.find(
+                (f) =>
+                    f.name.includes(doc.name) ||
+                    doc.metadata?.filePath?.includes(f.name),
             );
 
             // Generate public URL
@@ -254,7 +270,11 @@ export const getUserFilesAction = authenticatedAction
                 name: doc.name,
                 originalName: doc.original_name || doc.name,
                 title: doc.original_name || doc.name,
-                filePath: doc.metadata?.filePath || (storageFile ? `${userId}/documents/${storageFile.name}` : undefined),
+                filePath:
+                    doc.metadata?.filePath ||
+                    (storageFile
+                        ? `${userId}/documents/${storageFile.name}`
+                        : undefined),
                 publicUrl: publicUrl,
                 created_at: doc.created_at,
                 updated_at: doc.updated_at,
@@ -296,7 +316,10 @@ export const deleteFileAction = authenticatedAction
                     .remove([filePath]);
 
                 if (storageError) {
-                    console.warn('Failed to delete file from storage:', storageError.message);
+                    console.warn(
+                        'Failed to delete file from storage:',
+                        storageError.message,
+                    );
                     // Continue with database deletion even if storage deletion fails
                 }
             }
@@ -310,7 +333,9 @@ export const deleteFileAction = authenticatedAction
                     .eq('user_id', userId);
 
                 if (docError) {
-                    throw new Error(`Failed to delete document record: ${docError.message}`);
+                    throw new Error(
+                        `Failed to delete document record: ${docError.message}`,
+                    );
                 }
             }
 
@@ -324,21 +349,23 @@ export const deleteFileAction = authenticatedAction
                     .eq('name', fileName);
 
                 if (docError) {
-                    console.warn('Failed to delete document record by file name:', docError.message);
+                    console.warn(
+                        'Failed to delete document record by file name:',
+                        docError.message,
+                    );
                 }
             }
 
             return {
                 success: true,
-                message: 'File deleted successfully'
+                message: 'File deleted successfully',
             };
-
         } catch (error) {
             console.error('Delete file error:', error);
             throw new Error(
                 error instanceof Error
                     ? error.message
-                    : 'Failed to delete file'
+                    : 'Failed to delete file',
             );
         }
     });
@@ -379,7 +406,8 @@ function getFileTypeFromMime(mimeType: string | undefined): string {
     const typeMap: { [key: string]: string } = {
         'application/pdf': 'PDF',
         'text/plain': 'TXT',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'DOCX',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+            'DOCX',
         'application/msword': 'DOC',
         'image/jpeg': 'IMAGE',
         'image/jpg': 'IMAGE',

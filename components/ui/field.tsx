@@ -9,8 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import React from 'react';
 import { Input } from './input';
 
-export interface FieldInputProps
-    extends React.InputHTMLAttributes<HTMLInputElement> {}
+export interface FieldInputProps extends React.InputHTMLAttributes<HTMLInputElement> {}
 
 const FieldInput = React.forwardRef<HTMLInputElement, FieldInputProps>(
     ({ className, type, ...props }, ref) => {

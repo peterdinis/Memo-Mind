@@ -150,13 +150,19 @@ export function DocumentGrid() {
             publicUrl: file.publicUrl || '',
             size: file.size || 0,
             created_at: file.created_at || new Date().toISOString(),
-            filePath: file.filePath || file.metadata?.filePath || file.originalName || file.name,
+            filePath:
+                file.filePath ||
+                file.metadata?.filePath ||
+                file.originalName ||
+                file.name,
             type: getFileType(file.name),
             status: getStatusFromAPI(file.status),
         }));
     };
 
-    function getStatusFromAPI(status: string | undefined): 'processing' | 'processed' | 'error' {
+    function getStatusFromAPI(
+        status: string | undefined,
+    ): 'processing' | 'processed' | 'error' {
         switch (status) {
             case 'processing':
             case 'uploading':
@@ -302,9 +308,9 @@ export function DocumentGrid() {
 
     const handleDeleteConfirm = () => {
         if (selectedDoc) {
-            deleteFile({ 
+            deleteFile({
                 documentId: selectedDoc.id,
-                filePath: selectedDoc.filePath as unknown as string 
+                filePath: selectedDoc.filePath as unknown as string,
             });
         }
         setDeleteDialogOpen(false);
@@ -768,7 +774,8 @@ export function DocumentGrid() {
                             <div className='flex items-center space-x-2'>
                                 <div className='bg-muted flex-1 overflow-hidden rounded-md border px-3 py-2 text-sm'>
                                     <span className='truncate'>
-                                        {selectedDoc?.publicUrl || 'URL not available'}
+                                        {selectedDoc?.publicUrl ||
+                                            'URL not available'}
                                     </span>
                                 </div>
                                 <Button
@@ -813,7 +820,7 @@ export function DocumentGrid() {
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction 
+                        <AlertDialogAction
                             onClick={handleDownloadConfirm}
                             disabled={!selectedDoc?.publicUrl}
                         >
