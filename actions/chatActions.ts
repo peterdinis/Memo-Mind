@@ -19,8 +19,7 @@ export const chatWithDocument = authenticatedAction
     )
     .action(async ({ parsedInput: { documentId, question } }) => {
         const supabase = await createClient();
-
-        // Verify document access and status
+        
         const { data: document, error: docError } = await supabase
             .from('processed_documents')
             .select('*')

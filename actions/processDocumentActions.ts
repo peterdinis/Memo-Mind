@@ -13,20 +13,7 @@ import { getPineconeIndex } from '@/lib/pinecone';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-
-// Manual TextLoader implementation since it's missing in @langchain/community
-class TextLoader {
-    constructor(public filePath: string) {}
-    async load(): Promise<Document[]> {
-        const text = await fs.readFile(this.filePath, 'utf-8');
-        return [
-            new Document({
-                pageContent: text,
-                metadata: { source: this.filePath },
-            }),
-        ];
-    }
-}
+import { TextLoader } from '@/lib/text-loader';
 
 export const processDocumentAction = authenticatedAction
     .inputSchema(

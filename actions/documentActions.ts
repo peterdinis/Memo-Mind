@@ -1,4 +1,3 @@
-// actions/documentActions.ts
 'use server';
 
 import { authenticatedAction } from '@/lib/next-safe-action';
