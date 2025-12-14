@@ -20,7 +20,7 @@ export const useAuth = () => {
     const supabase = createClient();
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
-    const [profile, setProfile] = useState<any>(null);
+    const [profile, setProfile] = useState<User | null>(null);
 
     // Server actions with hooks
     const { execute: signIn, isExecuting: signingIn } = useAction(

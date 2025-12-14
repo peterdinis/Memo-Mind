@@ -4,6 +4,39 @@ import { authenticatedAction } from '@/lib/next-safe-action';
 import { createClient } from '@/supabase/server';
 import z from 'zod';
 
+// Custom types
+type DocumentStatus = 'processing' | 'processed' | 'failed' | 'error';
+
+interface DocumentUpdateData {
+    status: DocumentStatus;
+    updated_at: string;
+    error_message?: string;
+    processed_at?: string;
+}
+
+interface PineconeVector {
+    id: string;
+    values: number[];
+    metadata: {
+        documentId: string;
+        chunkIndex: number;
+        text: string;
+        documentName: string;
+    };
+}
+
+interface EmbeddingResponse {
+    data: Array<{
+        embedding: number[];
+    }>;
+}
+
+interface ContentTemplates {
+    pdf: string;
+    docx: string;
+    default: string;
+}
+
 export async function getUserDocuments() {
     const supabase = await createClient();
 
@@ -47,13 +80,13 @@ export async function getDocumentById(documentId: string) {
 
 export async function updateDocumentStatus(
     documentId: string,
-    status: 'processing' | 'processed' | 'failed',
+    status: DocumentStatus,
     errorMessage?: string,
 ) {
     const supabase = await createClient();
 
     try {
-        const updateData: any = {
+        const updateData: DocumentUpdateData = {
             status,
             updated_at: new Date().toISOString(),
         };
@@ -157,7 +190,7 @@ async function processDocumentPipeline(
     documentId: string,
     filePath: string,
     documentName: string,
-) {
+): Promise<void> {
     const supabase = await createClient();
 
     try {
@@ -296,7 +329,7 @@ Processing Date: ${new Date().toISOString()}
 
 `;
 
-    const contentTemplates = {
+    const contentTemplates: ContentTemplates = {
         pdf: `${baseText}
 THIS IS A SIMULATED PDF DOCUMENT EXTRACTION
 
@@ -437,7 +470,7 @@ This is simulated extracted text. For ${fileExtension.toUpperCase()} files, prop
     };
 
     return (
-        contentTemplates[fileExtension as keyof typeof contentTemplates] ||
+        contentTemplates[fileExtension as keyof ContentTemplates] ||
         contentTemplates.default
     );
 }
@@ -514,7 +547,7 @@ async function storeDocumentChunksInPinecone(
         const index = pinecone.Index(process.env.PINECONE_INDEX_NAME!);
 
         // Vytvorenie embeddings pre každý chunk
-        const vectors = [];
+        const vectors: PineconeVector[] = [];
         for (let i = 0; i < chunks.length; i++) {
             try {
                 const embedding = await createEmbedding(chunks[i]);
@@ -597,7 +630,7 @@ async function createEmbedding(text: string): Promise<number[]> {
             );
         }
 
-        const data = await response.json();
+        const data: EmbeddingResponse = await response.json();
         return data.data[0].embedding;
     } catch (error) {
         console.error('Error creating embedding:', error);
