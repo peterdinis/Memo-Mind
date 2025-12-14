@@ -6,7 +6,6 @@ export async function getDocumentChatHistory(documentId: string) {
     const supabase = await createClient();
 
     try {
-        // Overenie autentifikácie
         const {
             data: { user },
             error: authError,
@@ -31,7 +30,6 @@ export async function getDocumentChatHistory(documentId: string) {
         return { chatHistory: chatHistory || [] };
     } catch (error) {
         console.error('Error fetching chat history:', error);
-        // Vrátiť prázdny zoznam namiesto chyby
         return { chatHistory: [] };
     }
 }
@@ -40,7 +38,6 @@ export async function clearDocumentChatHistory(documentId: string) {
     const supabase = await createClient();
 
     try {
-        // Overenie autentifikácie
         const {
             data: { user },
             error: authError,

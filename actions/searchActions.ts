@@ -63,7 +63,14 @@ const parseDocumentMetadata = (metadata: unknown): DocumentMetadata => {
 
 // Helper function to create search result
 const createSearchResult = (
-    file: any,
+    file: {
+        id: string;
+        name: string;
+        created_at: string;
+        updated_at: string;
+        last_accessed_at: string;
+        metadata: unknown;
+    },
     userId: string,
     folder: string,
 ): SearchResult => ({
@@ -74,9 +81,22 @@ const createSearchResult = (
     updated_at: file.updated_at,
     last_accessed_at: file.last_accessed_at,
     metadata: parseDocumentMetadata(file.metadata),
-    size: typeof file.metadata?.size === 'number' ? file.metadata.size : 0,
+    size: (() => {
+        const parsedMetadata = parseDocumentMetadata(file.metadata);
+        return typeof parsedMetadata.size === 'number' ? parsedMetadata.size : 0;
+    })(),
     publicUrl: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/documents/${userId}/${folder}/${file.name}`,
 });
+
+// Define types for Supabase file objects
+interface SupabaseFile {
+    id: string;
+    name: string;
+    created_at: string;
+    updated_at: string;
+    last_accessed_at: string;
+    metadata: unknown;
+}
 
 export const searchDocumentsAction = authenticatedAction
     .inputSchema(searchDocumentsSchema)
@@ -110,7 +130,7 @@ export const searchDocumentsAction = authenticatedAction
             throw new Error(`Failed to search files: ${error.message}`);
         }
 
-        const filteredFiles = (files || []).filter(
+        const filteredFiles = (files as SupabaseFile[] || []).filter(
             (file) =>
                 file.name.toLowerCase().includes(query.toLowerCase()) ||
                 file.name
@@ -168,7 +188,7 @@ export const searchByMetadataAction = authenticatedAction
             );
         }
 
-        const filteredFiles = (files || []).filter((file) => {
+        const filteredFiles = (files as SupabaseFile[] || []).filter((file) => {
             const fileMetadata = parseDocumentMetadata(file.metadata);
 
             return Object.entries(metadata).every(([key, value]) => {
@@ -250,7 +270,7 @@ export const getRecentDocumentsAction = authenticatedAction
             );
         }
 
-        const recentFiles = (files || [])
+        const recentFiles = (files as SupabaseFile[] || [])
             .filter((file) => {
                 const fileDate = new Date(file.created_at);
                 return fileDate >= cutoffDate;
@@ -299,7 +319,7 @@ export const advancedSearchAction = authenticatedAction
             );
         }
 
-        const filteredFiles = (files || []).filter((file) => {
+        const filteredFiles = (files as SupabaseFile[] || []).filter((file) => {
             const fileMetadata = parseDocumentMetadata(file.metadata);
             const fileName = file.name.toLowerCase();
             const fileDisplayName = file.name
