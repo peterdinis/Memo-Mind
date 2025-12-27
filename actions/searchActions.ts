@@ -83,7 +83,9 @@ const createSearchResult = (
     metadata: parseDocumentMetadata(file.metadata),
     size: (() => {
         const parsedMetadata = parseDocumentMetadata(file.metadata);
-        return typeof parsedMetadata.size === 'number' ? parsedMetadata.size : 0;
+        return typeof parsedMetadata.size === 'number'
+            ? parsedMetadata.size
+            : 0;
     })(),
     publicUrl: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/documents/${userId}/${folder}/${file.name}`,
 });
@@ -130,7 +132,7 @@ export const searchDocumentsAction = authenticatedAction
             throw new Error(`Failed to search files: ${error.message}`);
         }
 
-        const filteredFiles = (files as SupabaseFile[] || []).filter(
+        const filteredFiles = ((files as SupabaseFile[]) || []).filter(
             (file) =>
                 file.name.toLowerCase().includes(query.toLowerCase()) ||
                 file.name
@@ -188,40 +190,44 @@ export const searchByMetadataAction = authenticatedAction
             );
         }
 
-        const filteredFiles = (files as SupabaseFile[] || []).filter((file) => {
-            const fileMetadata = parseDocumentMetadata(file.metadata);
+        const filteredFiles = ((files as SupabaseFile[]) || []).filter(
+            (file) => {
+                const fileMetadata = parseDocumentMetadata(file.metadata);
 
-            return Object.entries(metadata).every(([key, value]) => {
-                const fileValue = fileMetadata[key as keyof DocumentMetadata];
+                return Object.entries(metadata).every(([key, value]) => {
+                    const fileValue =
+                        fileMetadata[key as keyof DocumentMetadata];
 
-                if (value === undefined || value === null) return true;
-                if (fileValue === undefined || fileValue === null) return false;
+                    if (value === undefined || value === null) return true;
+                    if (fileValue === undefined || fileValue === null)
+                        return false;
 
-                // String search (case-insensitive)
-                if (
-                    typeof value === 'string' &&
-                    typeof fileValue === 'string'
-                ) {
-                    return fileValue
-                        .toLowerCase()
-                        .includes(value.toLowerCase());
-                }
+                    // String search (case-insensitive)
+                    if (
+                        typeof value === 'string' &&
+                        typeof fileValue === 'string'
+                    ) {
+                        return fileValue
+                            .toLowerCase()
+                            .includes(value.toLowerCase());
+                    }
 
-                // Array search (for tags)
-                if (Array.isArray(value) && Array.isArray(fileValue)) {
-                    return value.every((v) =>
-                        fileValue.some(
-                            (fv) =>
-                                typeof fv === 'string' &&
-                                fv.toLowerCase().includes(v.toLowerCase()),
-                        ),
-                    );
-                }
+                    // Array search (for tags)
+                    if (Array.isArray(value) && Array.isArray(fileValue)) {
+                        return value.every((v) =>
+                            fileValue.some(
+                                (fv) =>
+                                    typeof fv === 'string' &&
+                                    fv.toLowerCase().includes(v.toLowerCase()),
+                            ),
+                        );
+                    }
 
-                // Exact match for other types
-                return fileValue === value;
-            });
-        });
+                    // Exact match for other types
+                    return fileValue === value;
+                });
+            },
+        );
 
         const searchResults = filteredFiles
             .slice(offset, offset + limit)
@@ -270,7 +276,7 @@ export const getRecentDocumentsAction = authenticatedAction
             );
         }
 
-        const recentFiles = (files as SupabaseFile[] || [])
+        const recentFiles = ((files as SupabaseFile[]) || [])
             .filter((file) => {
                 const fileDate = new Date(file.created_at);
                 return fileDate >= cutoffDate;
@@ -319,78 +325,89 @@ export const advancedSearchAction = authenticatedAction
             );
         }
 
-        const filteredFiles = (files as SupabaseFile[] || []).filter((file) => {
-            const fileMetadata = parseDocumentMetadata(file.metadata);
-            const fileName = file.name.toLowerCase();
-            const fileDisplayName = file.name
-                .replace(/^\d+_/, '')
-                .toLowerCase();
-            const fileDate = new Date(file.created_at);
-            const fileSize = fileMetadata.size || 0;
+        const filteredFiles = ((files as SupabaseFile[]) || []).filter(
+            (file) => {
+                const fileMetadata = parseDocumentMetadata(file.metadata);
+                const fileName = file.name.toLowerCase();
+                const fileDisplayName = file.name
+                    .replace(/^\d+_/, '')
+                    .toLowerCase();
+                const fileDate = new Date(file.created_at);
+                const fileSize = fileMetadata.size || 0;
 
-            // Filter by search query
-            if (
-                filters.query &&
-                !fileName.includes(filters.query.toLowerCase()) &&
-                !fileDisplayName.includes(filters.query.toLowerCase())
-            ) {
-                return false;
-            }
-
-            // Filter by file type
-            if (filters.fileType) {
-                const fileExtension = file.name.split('.').pop()?.toLowerCase();
-                if (fileExtension !== filters.fileType.toLowerCase()) {
+                // Filter by search query
+                if (
+                    filters.query &&
+                    !fileName.includes(filters.query.toLowerCase()) &&
+                    !fileDisplayName.includes(filters.query.toLowerCase())
+                ) {
                     return false;
                 }
-            }
 
-            // Filter by size range
-            if (filters.minSize && fileSize < filters.minSize) {
-                return false;
-            }
-            if (filters.maxSize && fileSize > filters.maxSize) {
-                return false;
-            }
+                // Filter by file type
+                if (filters.fileType) {
+                    const fileExtension = file.name
+                        .split('.')
+                        .pop()
+                        ?.toLowerCase();
+                    if (fileExtension !== filters.fileType.toLowerCase()) {
+                        return false;
+                    }
+                }
 
-            // Filter by date range
-            if (filters.startDate && fileDate < new Date(filters.startDate)) {
-                return false;
-            }
-            if (filters.endDate && fileDate > new Date(filters.endDate)) {
-                return false;
-            }
-
-            // Filter by category
-            if (
-                filters.category &&
-                fileMetadata.category !== filters.category
-            ) {
-                return false;
-            }
-
-            // Filter by tags
-            if (filters.tags && filters.tags.length > 0) {
-                if (!fileMetadata.tags || !Array.isArray(fileMetadata.tags)) {
+                // Filter by size range
+                if (filters.minSize && fileSize < filters.minSize) {
                     return false;
                 }
-                const hasAllTags = filters.tags.every((tag) =>
-                    fileMetadata.tags!.some((fileTag) =>
-                        fileTag.toLowerCase().includes(tag.toLowerCase()),
-                    ),
-                );
-                if (!hasAllTags) {
+                if (filters.maxSize && fileSize > filters.maxSize) {
                     return false;
                 }
-            }
 
-            // Filter by status
-            if (filters.status && fileMetadata.status !== filters.status) {
-                return false;
-            }
+                // Filter by date range
+                if (
+                    filters.startDate &&
+                    fileDate < new Date(filters.startDate)
+                ) {
+                    return false;
+                }
+                if (filters.endDate && fileDate > new Date(filters.endDate)) {
+                    return false;
+                }
 
-            return true;
-        });
+                // Filter by category
+                if (
+                    filters.category &&
+                    fileMetadata.category !== filters.category
+                ) {
+                    return false;
+                }
+
+                // Filter by tags
+                if (filters.tags && filters.tags.length > 0) {
+                    if (
+                        !fileMetadata.tags ||
+                        !Array.isArray(fileMetadata.tags)
+                    ) {
+                        return false;
+                    }
+                    const hasAllTags = filters.tags.every((tag) =>
+                        fileMetadata.tags!.some((fileTag) =>
+                            fileTag.toLowerCase().includes(tag.toLowerCase()),
+                        ),
+                    );
+                    if (!hasAllTags) {
+                        return false;
+                    }
+                }
+
+                // Filter by status
+                if (filters.status && fileMetadata.status !== filters.status) {
+                    return false;
+                }
+
+                return true;
+            },
+        );
 
         const searchResults = filteredFiles
             .slice(filters.offset, filters.offset + filters.limit)

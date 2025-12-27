@@ -485,8 +485,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
         if (ext === 'pdf') return 'PDF';
         if (['doc', 'docx'].includes(ext)) return 'DOCX';
         if (ext === 'txt') return 'TXT';
-        if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext))
-            return 'IMAGE';
+        if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return 'IMAGE';
         return 'OTHER';
     };
 
@@ -635,7 +634,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                             </Button>
                         </div>
                     </div>
-                    <p className='text-sm text-muted-foreground'>
+                    <p className='text-muted-foreground text-sm'>
                         {doc.type} document - {doc.size}
                         {doc.chunks_count && doc.chunks_count > 0
                             ? ` - ${doc.chunks_count} chunks processed`
@@ -645,14 +644,14 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                 </div>
                 <ScrollArea className='flex-1'>
                     <div className='p-6'>
-                        <div className='rounded-lg bg-muted p-8'>
+                        <div className='bg-muted rounded-lg p-8'>
                             <div className='mx-auto max-w-4xl'>
-                                <div className='border bg-background shadow-lg'>
+                                <div className='bg-background border shadow-lg'>
                                     <div className='border-b p-8'>
                                         <h1 className='mb-4 text-2xl font-bold'>
                                             {doc.title}
                                         </h1>
-                                        <div className='space-y-2 text-sm text-muted-foreground'>
+                                        <div className='text-muted-foreground space-y-2 text-sm'>
                                             <p>Type: {doc.type}</p>
                                             <p>Size: {doc.size}</p>
                                             <p>Uploaded: {doc.uploadedAt}</p>
@@ -668,7 +667,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                     </div>
                                     <div className='p-8'>
                                         <div className='py-8 text-center'>
-                                            <FileText className='mx-auto mb-4 h-16 w-16 text-muted-foreground' />
+                                            <FileText className='text-muted-foreground mx-auto mb-4 h-16 w-16' />
                                             <p className='text-muted-foreground'>
                                                 This is a preview of "
                                                 {doc.title}".
@@ -762,7 +761,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                             )}
 
                                             <Button
-                                                className='ml-2 mt-4'
+                                                className='mt-4 ml-2'
                                                 onClick={(e) =>
                                                     handleDownloadDocument(
                                                         doc,
@@ -806,11 +805,11 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
 
     if (documents.length === 0) {
         return (
-            <div className='flex min-h-screen flex-col bg-background'>
+            <div className='bg-background flex min-h-screen flex-col'>
                 <main className='container mx-auto flex flex-1 items-center justify-center px-4 py-6'>
                     <Empty className='border-0 bg-transparent p-16'>
                         <EmptyMedia variant='icon' size='lg'>
-                            <FileText className='h-12 w-12 text-muted-foreground/70' />
+                            <FileText className='text-muted-foreground/70 h-12 w-12' />
                         </EmptyMedia>
                         <EmptyHeader className='mb-8'>
                             <EmptyTitle className='mb-4 text-3xl font-bold'>
@@ -833,8 +832,8 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
     }
 
     return (
-        <div className='flex min-h-screen flex-col bg-background'>
-            <header className='border-b bg-card'>
+        <div className='bg-background flex min-h-screen flex-col'>
+            <header className='bg-card border-b'>
                 <div className='container mx-auto flex items-center justify-between px-4 py-4'>
                     <div className='flex items-center gap-4'>
                         <Button
@@ -849,7 +848,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                             <h1 className='text-2xl font-bold'>
                                 Document Chat
                             </h1>
-                            <p className='text-sm text-muted-foreground'>
+                            <p className='text-muted-foreground text-sm'>
                                 AI-powered document analysis
                             </p>
                         </div>
@@ -871,7 +870,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                 <Card className='lg:col-span-1'>
                     <CardHeader>
                         <CardTitle>Your Documents</CardTitle>
-                        <p className='text-sm text-muted-foreground'>
+                        <p className='text-muted-foreground text-sm'>
                             {documents.length} document(s) loaded
                         </p>
                     </CardHeader>
@@ -881,7 +880,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                 {documents.map((doc) => (
                                     <div
                                         key={`doc-${doc.id}-${uniqueId}`}
-                                        className={`cursor-pointer rounded-lg border p-3 transition-all hover:bg-muted/50 ${
+                                        className={`hover:bg-muted/50 cursor-pointer rounded-lg border p-3 transition-all ${
                                             selectedDocument?.id === doc.id
                                                 ? 'border-primary bg-muted'
                                                 : 'border-transparent'
@@ -893,11 +892,11 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                         <div className='flex items-start justify-between'>
                                             <div className='flex items-center gap-2'>
                                                 {getFileIcon(doc.type)}
-                                                <div className='flex-1 min-w-0'>
+                                                <div className='min-w-0 flex-1'>
                                                     <p className='truncate text-sm font-medium'>
                                                         {doc.title}
                                                     </p>
-                                                    <div className='flex items-center gap-2 text-xs text-muted-foreground'>
+                                                    <div className='text-muted-foreground flex items-center gap-2 text-xs'>
                                                         <span>{doc.type}</span>
                                                         <span>•</span>
                                                         <span>{doc.size}</span>
@@ -980,7 +979,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                             )}
                         </div>
                         {selectedDocument && (
-                            <div className='flex items-center gap-4 text-sm text-muted-foreground'>
+                            <div className='text-muted-foreground flex items-center gap-4 text-sm'>
                                 <span>Size: {selectedDocument.size}</span>
                                 <span>
                                     Uploaded: {selectedDocument.uploadedAt}
@@ -1011,7 +1010,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                             <div className='flex h-full items-center justify-center p-8'>
                                 <Empty>
                                     <EmptyMedia>
-                                        <File className='h-8 w-8 text-muted-foreground' />
+                                        <File className='text-muted-foreground h-8 w-8' />
                                     </EmptyMedia>
                                     <EmptyHeader>
                                         <EmptyTitle>
@@ -1034,7 +1033,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                             <Bot className='h-5 w-5 text-green-600' />
                             AI Assistant
                         </CardTitle>
-                        <p className='text-sm text-muted-foreground'>
+                        <p className='text-muted-foreground text-sm'>
                             {selectedDocument
                                 ? `Ask questions about "${selectedDocument.title}"`
                                 : 'Select a document to start chatting'}
@@ -1080,11 +1079,11 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                                         : 'bg-muted'
                                                 }`}
                                             >
-                                                <p className='whitespace-pre-wrap text-sm'>
+                                                <p className='text-sm whitespace-pre-wrap'>
                                                     {message.content}
                                                 </p>
                                             </div>
-                                            <p className='text-xs text-muted-foreground'>
+                                            <p className='text-muted-foreground text-xs'>
                                                 {message.timestamp.toLocaleTimeString(
                                                     [],
                                                     {
@@ -1103,18 +1102,18 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                             <Bot className='h-4 w-4' />
                                         </div>
                                         <div className='flex-1 space-y-2'>
-                                            <div className='inline-block rounded-lg bg-muted px-4 py-2'>
+                                            <div className='bg-muted inline-block rounded-lg px-4 py-2'>
                                                 <div className='flex space-x-1'>
-                                                    <div className='h-2 w-2 animate-bounce rounded-full bg-muted-foreground'></div>
+                                                    <div className='bg-muted-foreground h-2 w-2 animate-bounce rounded-full'></div>
                                                     <div
-                                                        className='h-2 w-2 animate-bounce rounded-full bg-muted-foreground'
+                                                        className='bg-muted-foreground h-2 w-2 animate-bounce rounded-full'
                                                         style={{
                                                             animationDelay:
                                                                 '0.1s',
                                                         }}
                                                     ></div>
                                                     <div
-                                                        className='h-2 w-2 animate-bounce rounded-full bg-muted-foreground'
+                                                        className='bg-muted-foreground h-2 w-2 animate-bounce rounded-full'
                                                         style={{
                                                             animationDelay:
                                                                 '0.2s',
@@ -1136,7 +1135,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                             selectedDocument.chunks_count > 0 &&
                             messages.length <= 1 && (
                                 <div className='px-6 pb-4'>
-                                    <p className='mb-3 text-sm text-muted-foreground'>
+                                    <p className='text-muted-foreground mb-3 text-sm'>
                                         Try asking about this document:
                                     </p>
                                     <div className='flex flex-wrap gap-2'>

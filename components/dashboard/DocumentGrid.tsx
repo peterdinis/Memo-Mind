@@ -92,8 +92,8 @@ interface FileFromAPI {
     updated_at?: string;
     last_accessed_at?: string;
     metadata?: {
-        filePath: string
-    },
+        filePath: string;
+    };
     size: number;
     publicUrl?: string;
     filePath?: string;
