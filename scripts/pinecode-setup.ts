@@ -1,4 +1,3 @@
-// scripts/setup-pinecone.ts
 import { Pinecone } from '@pinecone-database/pinecone';
 
 async function setupPinecone() {
