@@ -20,6 +20,16 @@ export const chatWithDocument = authenticatedAction
     .action(async ({ parsedInput: { documentId, question } }) => {
         const supabase = await createClient();
 
+        // Get authenticated user
+        const {
+            data: { user },
+            error: authError,
+        } = await supabase.auth.getUser();
+
+        if (authError || !user) {
+            throw new Error('User not authenticated');
+        }
+
         const { data: document, error: docError } = await supabase
             .from('processed_documents')
             .select('*')
@@ -116,22 +126,46 @@ export const chatWithDocument = authenticatedAction
                 document_title: document.name,
             });
 
-            // 7. Save to chat history
+            // Validate response
+            if (!response || response.trim().length === 0) {
+                throw new Error('AI generated an empty response');
+            }
+
+            // 7. Save to chat history with user_id
             const { error: chatError } = await supabase
                 .from('document_chats')
                 .insert({
                     document_id: documentId,
+                    user_id: user.id,
                     user_message: question,
                     assistant_response: response,
                 });
 
             if (chatError) {
                 console.error('Failed to save chat history:', chatError);
+                // Don't throw here - still return the response even if saving fails
+                // This ensures the user gets their answer even if there's a DB issue
             }
 
             return { response };
         } catch (error) {
             console.error('Chat error:', error);
+
+            // Provide more specific error messages
+            if (error instanceof Error) {
+                if (error.message.includes('Pinecone')) {
+                    throw new Error(
+                        'Failed to retrieve document content. The document may not be properly indexed.',
+                    );
+                }
+                if (error.message.includes('OpenAI')) {
+                    throw new Error(
+                        'Failed to generate AI response. Please try again.',
+                    );
+                }
+                throw error;
+            }
+
             throw new Error('Failed to generate response. Please try again.');
         }
     });
