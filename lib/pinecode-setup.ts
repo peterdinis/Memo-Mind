@@ -1,9 +1,8 @@
-// scripts/setup-pinecone.ts
 import { Pinecone } from '@pinecone-database/pinecone';
 
 async function setupPinecone() {
     const apiKey =
-        'pcsk_3b9iX1_UvkZGAK6FnFHBihkcfu99NDXdod1Q1HCrEiHQkWfCyHVVzVWpQu8oxKALp1E7MB';
+        process.env.PINECONE_API_KEY;
     const indexName = process.env.PINECONE_INDEX_NAME || 'documents';
 
     if (!apiKey) {
