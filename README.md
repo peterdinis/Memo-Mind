@@ -17,7 +17,6 @@
 - 💬 **Interactive AI Chat**: Ask questions and get instant answers based on your document's content.
 - ⚡ **RAG Architecture**: Uses Retrieval-Augmented Generation for accurate, context-aware responses.
 - 🔐 **Secure Auth**: Powered by Supabase Auth for safe user management.
-- 🎨 **Premium UI**: Modern dashboard with glassmorphism effects and smooth Framer Motion animations.
 - 🌓 **Dark Mode**: Beautifully crafted dark and light themes.
 
 ---
