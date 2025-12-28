@@ -261,6 +261,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                         timestamp: new Date(),
                     };
                     setMessages((prev) => [...prev, aiMessage]);
+                    toast.success('Response received');
                 }
             },
             onError: (error: unknown) => {
@@ -272,7 +273,29 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                     timestamp: new Date(),
                 };
                 setMessages((prev) => [...prev, errorResponse]);
-                toast.error('Failed to send message');
+
+                // Show detailed error toast
+                if (errorMessage.includes('Authentication')) {
+                    toast.error('Please sign in to continue', {
+                        description: 'Your session may have expired',
+                    });
+                } else if (errorMessage.includes('Document not found')) {
+                    toast.error('Document not found', {
+                        description: 'The document may have been deleted',
+                    });
+                } else if (errorMessage.includes('no processable content')) {
+                    toast.error('Document has no content', {
+                        description: 'Please try uploading a different file',
+                    });
+                } else if (errorMessage.includes('processing')) {
+                    toast.error('Document not ready', {
+                        description: 'Please wait for processing to complete',
+                    });
+                } else {
+                    toast.error('Failed to send message', {
+                        description: errorMessage,
+                    });
+                }
             },
         },
     );
@@ -281,14 +304,18 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
         useAction(retryDocumentProcessing, {
             onSuccess: (result: unknown) => {
                 if (result) {
-                    toast.success('Document processing restarted');
+                    toast.success('Processing restarted', {
+                        description: 'Your document is being processed',
+                    });
                     setIsMonitoring(true);
                     startStatusMonitoring();
                 }
             },
             onError: (error: unknown) => {
                 const errorMessage = getErrorMessage(error);
-                toast.error(`Failed to retry processing: ${errorMessage}`);
+                toast.error('Failed to retry processing', {
+                    description: errorMessage,
+                });
             },
         });
 
@@ -321,9 +348,14 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                         clearInterval(interval);
 
                         if (currentStatus.status === 'processed') {
-                            toast.success('Document processing completed!');
+                            toast.success('Document ready!', {
+                                description: `${currentStatus.chunks_count} chunks processed`,
+                            });
                         } else if (currentStatus.status === 'error') {
-                            toast.error('Document processing failed');
+                            toast.error('Processing failed', {
+                                description:
+                                    'Please try re-uploading your document',
+                            });
                         }
                     }
                 }
@@ -335,6 +367,9 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
         setTimeout(() => {
             clearInterval(interval);
             setIsMonitoring(false);
+            toast.info('Processing is taking longer than expected', {
+                description: 'Please check back in a few minutes',
+            });
         }, 120000);
 
         return () => clearInterval(interval);
@@ -425,10 +460,14 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                     timestamp: new Date(),
                 },
             ]);
-            toast.success('Chat history cleared');
+            toast.success('Chat history cleared', {
+                description: 'You can start a fresh conversation',
+            });
         } catch (error) {
             console.error('Failed to clear chat history:', error);
-            toast.error('Failed to clear chat history');
+            toast.error('Failed to clear chat history', {
+                description: 'Please try again',
+            });
         }
     };
 
@@ -502,14 +541,31 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
 
         if (selectedDocument.status !== 'processed') {
             toast.error(
-                `Document is ${selectedDocument.status}. Please wait until processing is complete.`,
+                `Document is ${selectedDocument.status}`,
+                {
+                    description: 'Please wait until processing is complete',
+                },
             );
             return;
         }
 
         if (selectedDocument.chunks_count === 0) {
             toast.error(
-                'This document has no processed content available for AI analysis. Please use the "Retry Processing" button or re-upload the document.',
+                'Document has no content',
+                {
+                    description: 'Please try re-uploading or use the retry button',
+                },
+            );
+            return;
+        }
+
+        // Validate question length
+        if (input.trim().length > 1000) {
+            toast.error(
+                'Question is too long',
+                {
+                    description: 'Please keep your question under 1000 characters',
+                },
             );
             return;
         }
@@ -595,23 +651,23 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                         <div className='flex gap-2'>
                             {(doc.status === 'error' ||
                                 doc.chunks_count === 0) && (
-                                <Button
-                                    variant='outline'
-                                    size='sm'
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleRetryProcessing(doc);
-                                    }}
-                                    disabled={isRetrying || isMonitoring}
-                                >
-                                    <RefreshCw
-                                        className={`h-4 w-4 ${isRetrying ? 'animate-spin' : ''}`}
-                                    />
-                                    {isRetrying
-                                        ? 'Retrying...'
-                                        : 'Retry Processing'}
-                                </Button>
-                            )}
+                                    <Button
+                                        variant='outline'
+                                        size='sm'
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleRetryProcessing(doc);
+                                        }}
+                                        disabled={isRetrying || isMonitoring}
+                                    >
+                                        <RefreshCw
+                                            className={`h-4 w-4 ${isRetrying ? 'animate-spin' : ''}`}
+                                        />
+                                        {isRetrying
+                                            ? 'Retrying...'
+                                            : 'Retry Processing'}
+                                    </Button>
+                                )}
                             <Button
                                 variant='outline'
                                 size='sm'
@@ -675,7 +731,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                                 {doc.status === 'processed' ? (
                                                     <>
                                                         {doc.chunks_count &&
-                                                        doc.chunks_count > 0 ? (
+                                                            doc.chunks_count > 0 ? (
                                                             <>
                                                                 The document is
                                                                 processed and
@@ -706,7 +762,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                                         )}
                                                     </>
                                                 ) : doc.status ===
-                                                  'processing' ? (
+                                                    'processing' ? (
                                                     <>
                                                         The document is
                                                         currently being
@@ -723,7 +779,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                                         )}
                                                     </>
                                                 ) : doc.status ===
-                                                  'uploading' ? (
+                                                    'uploading' ? (
                                                     'The document is being uploaded...'
                                                 ) : (
                                                     'There was an error processing this document. Please try uploading again.'
@@ -733,32 +789,32 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                             {(doc.status === 'error' ||
                                                 (doc.status === 'processed' &&
                                                     doc.chunks_count ===
-                                                        0)) && (
-                                                <Button
-                                                    className='mt-4'
-                                                    onClick={() =>
-                                                        handleRetryProcessing(
-                                                            doc,
-                                                        )
-                                                    }
-                                                    disabled={
-                                                        isRetrying ||
-                                                        isMonitoring
-                                                    }
-                                                    variant={
-                                                        doc.status === 'error'
-                                                            ? 'destructive'
-                                                            : 'outline'
-                                                    }
-                                                >
-                                                    <RefreshCw
-                                                        className={`mr-2 h-4 w-4 ${isRetrying ? 'animate-spin' : ''}`}
-                                                    />
-                                                    {isRetrying
-                                                        ? 'Retrying Processing...'
-                                                        : 'Retry Document Processing'}
-                                                </Button>
-                                            )}
+                                                    0)) && (
+                                                    <Button
+                                                        className='mt-4'
+                                                        onClick={() =>
+                                                            handleRetryProcessing(
+                                                                doc,
+                                                            )
+                                                        }
+                                                        disabled={
+                                                            isRetrying ||
+                                                            isMonitoring
+                                                        }
+                                                        variant={
+                                                            doc.status === 'error'
+                                                                ? 'destructive'
+                                                                : 'outline'
+                                                        }
+                                                    >
+                                                        <RefreshCw
+                                                            className={`mr-2 h-4 w-4 ${isRetrying ? 'animate-spin' : ''}`}
+                                                        />
+                                                        {isRetrying
+                                                            ? 'Retrying Processing...'
+                                                            : 'Retry Document Processing'}
+                                                    </Button>
+                                                )}
 
                                             <Button
                                                 className='mt-4 ml-2'
@@ -880,11 +936,10 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                 {documents.map((doc) => (
                                     <div
                                         key={`doc-${doc.id}-${uniqueId}`}
-                                        className={`hover:bg-muted/50 cursor-pointer rounded-lg border p-3 transition-all ${
-                                            selectedDocument?.id === doc.id
+                                        className={`hover:bg-muted/50 cursor-pointer rounded-lg border p-3 transition-all ${selectedDocument?.id === doc.id
                                                 ? 'border-primary bg-muted'
                                                 : 'border-transparent'
-                                        }`}
+                                            }`}
                                         onClick={() =>
                                             handleDocumentSelect(doc)
                                         }
@@ -919,7 +974,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                                 {doc.chunks_count &&
                                                     doc.chunks_count > 0 &&
                                                     doc.status ===
-                                                        'processed' && (
+                                                    'processed' && (
                                                         <Badge
                                                             variant='outline'
                                                             className='text-xs'
@@ -930,27 +985,27 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                                     )}
                                                 {(doc.status === 'error' ||
                                                     doc.chunks_count === 0) && (
-                                                    <Button
-                                                        variant='ghost'
-                                                        size='sm'
-                                                        className='h-6 w-6 p-0'
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleRetryProcessing(
-                                                                doc,
-                                                            );
-                                                        }}
-                                                        disabled={
-                                                            isRetrying ||
-                                                            isMonitoring
-                                                        }
-                                                        title='Retry processing'
-                                                    >
-                                                        <RefreshCw
-                                                            className={`h-3 w-3 ${isRetrying ? 'animate-spin' : ''}`}
-                                                        />
-                                                    </Button>
-                                                )}
+                                                        <Button
+                                                            variant='ghost'
+                                                            size='sm'
+                                                            className='h-6 w-6 p-0'
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleRetryProcessing(
+                                                                    doc,
+                                                                );
+                                                            }}
+                                                            disabled={
+                                                                isRetrying ||
+                                                                isMonitoring
+                                                            }
+                                                            title='Retry processing'
+                                                        >
+                                                            <RefreshCw
+                                                                className={`h-3 w-3 ${isRetrying ? 'animate-spin' : ''}`}
+                                                            />
+                                                        </Button>
+                                                    )}
                                             </div>
                                         </div>
                                     </div>
@@ -990,11 +1045,11 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                             ? 'default'
                                             : selectedDocument.status ===
                                                 'processing'
-                                              ? 'secondary'
-                                              : selectedDocument.status ===
-                                                  'error'
-                                                ? 'destructive'
-                                                : 'outline'
+                                                ? 'secondary'
+                                                : selectedDocument.status ===
+                                                    'error'
+                                                    ? 'destructive'
+                                                    : 'outline'
                                     }
                                     className='capitalize'
                                 >
@@ -1046,18 +1101,16 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                 {messages.map((message) => (
                                     <div
                                         key={message.id}
-                                        className={`flex gap-3 ${
-                                            message.role === 'user'
+                                        className={`flex gap-3 ${message.role === 'user'
                                                 ? 'flex-row-reverse'
                                                 : 'flex-row'
-                                        }`}
+                                            }`}
                                     >
                                         <div
-                                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-                                                message.role === 'user'
+                                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${message.role === 'user'
                                                     ? 'bg-primary text-primary-foreground'
                                                     : 'bg-green-100 text-green-600 dark:bg-green-900/20'
-                                            }`}
+                                                }`}
                                         >
                                             {message.role === 'user' ? (
                                                 <User className='h-4 w-4' />
@@ -1066,18 +1119,16 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                             )}
                                         </div>
                                         <div
-                                            className={`flex-1 space-y-2 ${
-                                                message.role === 'user'
+                                            className={`flex-1 space-y-2 ${message.role === 'user'
                                                     ? 'text-right'
                                                     : 'text-left'
-                                            }`}
+                                                }`}
                                         >
                                             <div
-                                                className={`inline-block rounded-lg px-4 py-2 ${
-                                                    message.role === 'user'
+                                                className={`inline-block rounded-lg px-4 py-2 ${message.role === 'user'
                                                         ? 'bg-primary text-primary-foreground'
                                                         : 'bg-muted'
-                                                }`}
+                                                    }`}
                                             >
                                                 <p className='text-sm whitespace-pre-wrap'>
                                                     {message.content}
@@ -1167,9 +1218,9 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                     placeholder={
                                         selectedDocument
                                             ? selectedDocument.status ===
-                                                  'processed' &&
-                                              selectedDocument.chunks_count &&
-                                              selectedDocument.chunks_count > 0
+                                                'processed' &&
+                                                selectedDocument.chunks_count &&
+                                                selectedDocument.chunks_count > 0
                                                 ? `Ask about ${selectedDocument.title}...`
                                                 : `Document is ${selectedDocument.status}...`
                                             : 'Select a document to start chatting...'
@@ -1178,7 +1229,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                     disabled={
                                         !selectedDocument ||
                                         selectedDocument.status !==
-                                            'processed' ||
+                                        'processed' ||
                                         !selectedDocument.chunks_count ||
                                         selectedDocument.chunks_count === 0 ||
                                         isLoading ||
@@ -1191,7 +1242,7 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                                         !input.trim() ||
                                         !selectedDocument ||
                                         selectedDocument.status !==
-                                            'processed' ||
+                                        'processed' ||
                                         !selectedDocument.chunks_count ||
                                         selectedDocument.chunks_count === 0 ||
                                         isLoading ||
