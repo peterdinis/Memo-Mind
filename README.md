@@ -46,37 +46,40 @@
 ### Installation
 
 1. **Clone the repository**
-   ```bash
-   git clone https://github.com/your-username/memo-mind.git
-   cd memo-mind
-   ```
+
+    ```bash
+    git clone https://github.com/your-username/memo-mind.git
+    cd memo-mind
+    ```
 
 2. **Install dependencies**
-   ```bash
-   bun install
-   # or
-   npm install
-   ```
+
+    ```bash
+    bun install
+    # or
+    npm install
+    ```
 
 3. **Environment Setup**
    Create a `.env.local` file and add the following:
-   ```env
-   NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-   
-   OPENAI_API_KEY=your_openai_api_key
-   
-   PINECONE_API_KEY=your_pinecone_api_key
-   PINECONE_INDEX=your_pinecone_index_name
-   ```
+
+    ```env
+    NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+    SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+
+    OPENAI_API_KEY=your_openai_api_key
+
+    PINECONE_API_KEY=your_pinecone_api_key
+    PINECONE_INDEX=your_pinecone_index_name
+    ```
 
 4. **Run the development server**
-   ```bash
-   bun dev
-   # or
-   npm run dev
-   ```
+    ```bash
+    bun dev
+    # or
+    npm run dev
+    ```
 
 Open [http://localhost:3000](http://localhost:3000) to see the magic happen!
 
