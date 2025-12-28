@@ -1,4 +1,3 @@
-// @/lib/pinecone.ts
 import { Pinecone } from '@pinecone-database/pinecone';
 
 export const PINECONE_INDEX_NAME =
