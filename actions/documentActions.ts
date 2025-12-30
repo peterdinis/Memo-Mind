@@ -194,9 +194,6 @@ async function processDocumentPipeline(
     const supabase = await createClient();
 
     try {
-        console.log(`Starting processing for document: ${documentId}`);
-
-        // 1. Načítanie súboru z Supabase Storage
         const fileData = await downloadFileFromStorage(filePath);
         if (!fileData) {
             throw new Error('Could not download file from storage');
@@ -211,17 +208,11 @@ async function processDocumentPipeline(
             throw new Error('No text could be extracted from the document');
         }
 
-        console.log(
-            `Extracted text length: ${extractedText.length} characters`,
-        );
-
         // 3. Rozdelenie textu na chunk-y
         const chunks = splitTextIntoChunks(extractedText);
         if (chunks.length === 0) {
             throw new Error('No text chunks were created from the document');
         }
-
-        console.log(`Created ${chunks.length} text chunks`);
 
         // 4. Vytvorenie embeddings a uloženie do Pinecone
         await storeDocumentChunksInPinecone(documentId, chunks, documentName);
@@ -242,10 +233,6 @@ async function processDocumentPipeline(
                 'Failed to update document status after processing',
             );
         }
-
-        console.log(
-            `Successfully processed document ${documentId} with ${chunks.length} chunks`,
-        );
     } catch (error) {
         console.error(`Processing failed for document ${documentId}:`, error);
 
@@ -305,11 +292,6 @@ async function extractTextFromDocument(
                 return text;
             }
         }
-
-        // Pre všetky ostatné typy súborov - simulovaná extrakcia
-        console.log(
-            `Using simulated text extraction for ${fileExtension} file: ${fileName}`,
-        );
 
         return generateSimulatedText(fileName, fileExtension || 'unknown');
     } catch (error) {
@@ -586,9 +568,6 @@ async function storeDocumentChunksInPinecone(
             const batch = vectors.slice(i, i + batchSize);
             try {
                 await index.namespace(documentId).upsert(batch);
-                console.log(
-                    `Uploaded batch ${Math.floor(i / batchSize) + 1} to Pinecone (${batch.length} vectors)`,
-                );
             } catch (error) {
                 console.error(
                     `Error uploading batch ${Math.floor(i / batchSize) + 1} to Pinecone:`,
@@ -596,10 +575,6 @@ async function storeDocumentChunksInPinecone(
                 );
             }
         }
-
-        console.log(
-            `Successfully stored ${vectors.length} chunks in Pinecone for document ${documentId}`,
-        );
     } catch (error) {
         console.error('Error storing chunks in Pinecone:', error);
         throw new Error(

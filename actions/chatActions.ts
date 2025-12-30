@@ -39,10 +39,7 @@ export const chatWithDocument = authenticatedAction
             documentId: z.string().uuid('Invalid document ID'),
             question: z
                 .string()
-                .min(
-                    MIN_QUESTION_LENGTH,
-                    'Question cannot be empty',
-                )
+                .min(MIN_QUESTION_LENGTH, 'Question cannot be empty')
                 .max(
                     MAX_QUESTION_LENGTH,
                     `Question must be less than ${MAX_QUESTION_LENGTH} characters`,
@@ -90,8 +87,9 @@ export const chatWithDocument = authenticatedAction
                 failed: 'Document processing failed. Please try re-uploading the document.',
             };
             throw new Error(
-                statusMessages[document.status as keyof typeof statusMessages] ||
-                'Document is not ready for chat.',
+                statusMessages[
+                    document.status as keyof typeof statusMessages
+                ] || 'Document is not ready for chat.',
             );
         }
 

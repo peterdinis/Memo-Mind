@@ -246,13 +246,19 @@ export const processDocumentAction = authenticatedAction
                 } else if (msg.includes('timeout')) {
                     errorMessage =
                         'Processing timed out. Please try a smaller file or contact support.';
-                } else if (msg.includes('openai') || msg.includes('embedding')) {
+                } else if (
+                    msg.includes('openai') ||
+                    msg.includes('embedding')
+                ) {
                     errorMessage =
                         'AI service error while processing. Please try again in a moment.';
                 } else if (msg.includes('pinecone') || msg.includes('vector')) {
                     errorMessage =
                         'Vector database error. Please try again or contact support.';
-                } else if (msg.includes('storage') || msg.includes('download')) {
+                } else if (
+                    msg.includes('storage') ||
+                    msg.includes('download')
+                ) {
                     errorMessage =
                         'Failed to access file storage. Please try uploading again.';
                 } else {
