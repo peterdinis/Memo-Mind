@@ -26,9 +26,6 @@ export const getPineconeClient = async (): Promise<Pinecone> => {
         const indexNames = indexes.indexes?.map((index) => index.name) || [];
 
         if (!indexNames.includes(PINECONE_INDEX_NAME)) {
-            console.log(
-                `📋 Pinecone index "${PINECONE_INDEX_NAME}" not found. Creating...`,
-            );
             await createPineconeIndex(pineconeClient);
         }
 
@@ -44,7 +41,6 @@ export const getPineconeClient = async (): Promise<Pinecone> => {
 async function createPineconeIndex(pinecone: Pinecone): Promise<void> {
     // Zabráňte viacnásobnému vytvoreniu indexu
     if (indexCreationInProgress) {
-        console.log('⏳ Index creation already in progress, waiting...');
         // Počkajte maximálne 2 minúty
         for (let i = 0; i < 12; i++) {
             await new Promise((resolve) => setTimeout(resolve, 10000));
@@ -52,7 +48,6 @@ async function createPineconeIndex(pinecone: Pinecone): Promise<void> {
             const indexNames =
                 indexes.indexes?.map((index) => index.name) || [];
             if (indexNames.includes(PINECONE_INDEX_NAME)) {
-                console.log('✅ Index is now ready!');
                 return;
             }
         }
@@ -62,8 +57,6 @@ async function createPineconeIndex(pinecone: Pinecone): Promise<void> {
     indexCreationInProgress = true;
 
     try {
-        console.log(`🚀 Creating Pinecone index: ${PINECONE_INDEX_NAME}`);
-
         await pinecone.createIndex({
             name: PINECONE_INDEX_NAME,
             dimension: 1536,
@@ -75,8 +68,6 @@ async function createPineconeIndex(pinecone: Pinecone): Promise<void> {
                 },
             },
         });
-
-        console.log('⏳ Waiting for index to be ready...');
 
         // Čakáme kým bude index ready
         let isReady = false;
@@ -92,17 +83,12 @@ async function createPineconeIndex(pinecone: Pinecone): Promise<void> {
                     await pinecone.describeIndex(PINECONE_INDEX_NAME);
                 const status = description.status?.state;
 
-                console.log(`⏰ Attempt ${attempts}/${maxAttempts}: ${status}`);
-
                 if (status === 'Ready') {
                     isReady = true;
-                    console.log('✅ Pinecone index is ready!');
                     break;
                 }
             } catch (error) {
-                console.log(
-                    `⏰ Attempt ${attempts}/${maxAttempts}: Still initializing...`,
-                );
+                throw error
             }
         }
 

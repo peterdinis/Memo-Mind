@@ -338,9 +338,6 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                     selectedDocument.id,
                 );
                 if (currentStatus) {
-                    console.log(
-                        `Document status: ${currentStatus.status}, chunks: ${currentStatus.chunks_count}`,
-                    );
 
                     if (currentStatus.status !== 'processing') {
                         fetchFiles({});
