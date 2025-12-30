@@ -338,7 +338,6 @@ export function DocumentChat({ documentId }: DocumentChatProps) {
                     selectedDocument.id,
                 );
                 if (currentStatus) {
-
                     if (currentStatus.status !== 'processing') {
                         fetchFiles({});
                         setIsMonitoring(false);

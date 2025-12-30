@@ -88,7 +88,7 @@ async function createPineconeIndex(pinecone: Pinecone): Promise<void> {
                     break;
                 }
             } catch (error) {
-                throw error
+                throw error;
             }
         }
 

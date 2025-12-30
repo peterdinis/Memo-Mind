@@ -52,7 +52,7 @@ async function setupPinecone() {
                     break;
                 }
             } catch (error) {
-                throw error
+                throw error;
             }
         }
 
