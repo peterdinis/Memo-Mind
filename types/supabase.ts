@@ -213,7 +213,6 @@ export type UpdateDocumentChat = UpdateTables<'document_chats'>;
 
 export type DocumentOverview = Views<'document_overview'>;
 
-// Typy pre dokument metadata
 export interface DocumentMetadata {
     name: string;
     type: string;
@@ -227,7 +226,6 @@ export interface ChatMetadata {
     is_fallback?: boolean;
 }
 
-// Typy pre Pinecone metadata
 export interface PineconeDocumentMetadata {
     documentId: string;
     userId: string;
